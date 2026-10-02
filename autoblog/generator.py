@@ -147,6 +147,50 @@ class AnthropicGenerator:
         return [str(x).strip() for x in json.loads(m.group(0))] if m else []
 
 
+class OpenAICompatGenerator(AnthropicGenerator):
+    """OpenAI 호환 /chat/completions 를 쓰는 제공자(Gemini·Groq·OpenRouter·Ollama 등). 추가 패키지 불필요."""
+
+    def __init__(self, cfg: dict):
+        llm = cfg["llm"]
+        if not llm.get("base_url"):
+            raise RuntimeError("llm.base_url 이 설정되지 않았습니다. config.yaml 을 확인하세요.")
+        self.cfg = cfg
+        self.base_url = llm["base_url"].rstrip("/")
+        # 로컬 Ollama 처럼 키가 필요 없는 경우를 위해 api_key_env 가 비어 있으면 키 없이 호출
+        env = llm.get("api_key_env", "LLM_API_KEY")
+        self.api_key = secret(env, required=bool(env) and llm.get("api_key_required", True))
+
+    def _complete(self, system: str, user: str) -> str:
+        import time
+        import urllib.error
+        import urllib.request
+
+        llm = self.cfg["llm"]
+        payload = {"model": llm["model"], "max_tokens": llm["max_tokens"],
+                   "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+        if llm.get("temperature") is not None:
+            payload["temperature"] = llm["temperature"]
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        last = ""
+        for attempt in range(4):
+            req = urllib.request.Request(self.base_url + "/chat/completions", method="POST", headers=headers,
+                                         data=json.dumps(payload).encode("utf-8"))
+            try:
+                with urllib.request.urlopen(req, timeout=llm.get("timeout", 180)) as r:
+                    data = json.loads(r.read().decode("utf-8"))
+                return data["choices"][0]["message"]["content"] or ""
+            except urllib.error.HTTPError as e:
+                last = f"HTTP {e.code}: {e.read().decode('utf-8', 'replace')[:300]}"
+                if e.code not in (429, 500, 502, 503, 504):  # 키 오류·잘못된 모델명 등은 재시도 무의미
+                    raise RuntimeError(f"LLM 호출 실패 - {last}") from None
+            except (urllib.error.URLError, TimeoutError) as e:
+                last = f"연결 실패: {e}"
+            time.sleep(min(2 ** attempt * 5, 30))  # 무료 한도(분당 요청 수) 초과 대비 대기 후 재시도
+        raise RuntimeError(f"LLM 호출 실패(재시도 소진) - {last}")
+
+
 def _json_list(out: str) -> list[str]:
     m = re.search(r"\[.*\]", out, re.S)
     return [str(x).strip() for x in json.loads(m.group(0)) if str(x).strip()] if m else []
@@ -196,4 +240,6 @@ def make_generator(cfg: dict):
         return MockGenerator(cfg)
     if provider == "anthropic":
         return AnthropicGenerator(cfg)
+    if provider == "openai_compat":
+        return OpenAICompatGenerator(cfg)
     raise ValueError(f"알 수 없는 llm.provider: {provider}")

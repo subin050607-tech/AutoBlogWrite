@@ -50,6 +50,13 @@ API 키 없이 흐름만 시험하려면 `config.yaml` 에 `llm.provider: mock`,
 
 cron 으로 돌리려면 `autoblog run` 대신 `*/30 * * * * autoblog post` 처럼 `post` 를 쓸 수 있습니다(이 경우 스케줄 규칙은 적용되지 않음).
 
+## 무료 AI 제공자 사용
+
+`config.yaml` 의 `llm` 을 `provider: openai_compat` 로 바꾸고 `base_url`/`model` 을 채운 뒤, 발급받은 키를 `.env` 의 `LLM_API_KEY` 에 넣습니다.
+예시(Gemini, 무료 한도 있음): `base_url: https://generativelanguage.googleapis.com/v1beta/openai`, `model: gemini-2.5-flash`.
+Groq·OpenRouter·내 PC의 Ollama(`api_key_env: ""`)도 같은 방식입니다. 무료 한도·모델명은 자주 바뀌니 각 서비스에서 확인하세요.
+한도(429) 초과 시 자동으로 대기 후 재시도하지만, 무료 모델은 긴 글의 품질·형식 준수가 떨어질 수 있어 `preview` 로 먼저 확인하세요.
+
 ## 웹 UI (대시보드·편집·예약)
 
 ```bash

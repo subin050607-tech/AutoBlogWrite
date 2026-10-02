@@ -1,9 +1,16 @@
 # autoblog 설정 (config.yaml 로 복사해서 사용)
 
 llm:
-  provider: anthropic          # anthropic | mock(오프라인 테스트용)
+  provider: anthropic          # anthropic | openai_compat(무료 제공자 가능) | mock(오프라인 테스트용)
   model: claude-sonnet-5-5
   max_tokens: 6000
+  # --- 무료 제공자 예시: provider 를 openai_compat 로 바꾸고 아래를 채우세요 (키는 .env 의 LLM_API_KEY) ---
+  # Google Gemini : base_url https://generativelanguage.googleapis.com/v1beta/openai   model gemini-2.5-flash
+  # Groq          : base_url https://api.groq.com/openai/v1                           model llama-3.3-70b-versatile
+  # OpenRouter    : base_url https://openrouter.ai/api/v1                             model (":free" 로 끝나는 모델)
+  # Ollama(내 PC) : base_url http://localhost:11434/v1  model qwen2.5:7b  api_key_env ""(키 불필요)
+  # base_url: ""
+  # api_key_env: LLM_API_KEY
   # temperature: 0.8        # 기본은 모델 기본값 사용. 주석을 풀 때 'unexpected keyword' 오류가 나면 다시 주석 처리
 
 blog:

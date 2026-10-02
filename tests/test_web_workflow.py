@@ -230,3 +230,46 @@ def test_anthropic_retries_without_temperature_when_rejected(tmp_path):
     g = AnthropicGenerator.__new__(AnthropicGenerator)
     g.cfg, g.client = c, type("C", (), {"messages": Msgs()})()
     assert g._complete("s", "u") == "ok" and len(calls) == 2 and "temperature" not in calls[1]
+
+
+def test_openai_compat_generator_against_fake_server(tmp_path, monkeypatch):
+    from http.server import BaseHTTPRequestHandler
+    from autoblog.generator import make_generator
+
+    seen = {"calls": 0}
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+
+        def do_POST(self):
+            seen["calls"] += 1
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            seen.update(path=self.path, auth=self.headers.get("Authorization"), body=body)
+            if self.path.endswith("/bad/chat/completions"):
+                self.send_response(401); self.end_headers(); self.wfile.write(b'{"error":"invalid key"}'); return
+            out = json.dumps({"choices": [{"message": {"content": '["가 제목", "나 제목"]'}}]}).encode()
+            self.send_response(200); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setenv("LLM_API_KEY", "free-key")
+    c, *_ = mk(tmp_path)
+    c["llm"].update(provider="openai_compat", base_url=f"http://127.0.0.1:{srv.server_port}/v1", model="m")
+    g = make_generator(c)
+    assert g.suggest_titles("키워드", 2) == ["가 제목", "나 제목"]
+    assert seen["path"] == "/v1/chat/completions" and seen["auth"] == "Bearer free-key"
+    assert seen["body"]["model"] == "m" and "temperature" not in seen["body"]
+    assert seen["body"]["messages"][0]["role"] == "system"
+
+    # 키 오류(401)는 재시도하지 않고 바로 알려준다
+    c["llm"]["base_url"] = f"http://127.0.0.1:{srv.server_port}/bad"
+    seen["calls"] = 0
+    with pytest.raises(RuntimeError, match="401"):
+        make_generator(c).suggest_titles("k", 1)
+    assert seen["calls"] == 1
+
+    # 키가 필요 없는 로컬(Ollama) 설정
+    monkeypatch.delenv("LLM_API_KEY")
+    c["llm"].update(api_key_env="", base_url=f"http://127.0.0.1:{srv.server_port}/v1")
+    assert make_generator(c).suggest_titles("k", 2) == ["가 제목", "나 제목"] and seen["auth"] is None
+    srv.shutdown()
