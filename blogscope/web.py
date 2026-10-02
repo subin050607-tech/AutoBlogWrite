@@ -51,11 +51,13 @@ class App:
             raise ApiError("글쓰기는 AI 키가 필요합니다. '설정' 탭에서 무료 Gemini API 키를 입력하세요.", 412)
         return self._llm_factory(self.settings)
 
-    def _remember_model(self, client) -> None:
-        """구글 안내로 모델이 자동 전환됐으면 설정에 저장해 다음부터 바로 그 모델을 쓴다."""
+    def _remember_model(self, client) -> str:
+        """구글 안내로 모델이 자동 전환됐으면 설정에 저장. 혼잡해서 임시 대체 모델을 썼으면 안내 문구를 돌려준다."""
         new = getattr(client, "switched_to", None)
         if new:
             self.settings.update({"llm_model": new})
+        used = getattr(client, "used_model", None)
+        return f"기본 모델이 혼잡해서 이번에는 '{used}' 모델로 작성했습니다." if used else ""
 
     def _refs(self, keyword: str) -> list[dict]:
         api = self.api()
@@ -127,17 +129,17 @@ class App:
             client = self.llm()
             refs = self._refs(inp["keyword"]) if body.get("use_refs", True) else []
             res = writer.plan(client, inp, refs)
-            self._remember_model(client)
-            return {**res, "input": inp, "refs": refs, "volume": self._volume(inp["keyword"])}
+            notice = self._remember_model(client)
+            return {**res, "input": inp, "refs": refs, "volume": self._volume(inp["keyword"]), "notice": notice}
         if path == "/api/writer/write" and method == "POST":
             inp = writer.normalize(body.get("input") or {})
             client = self.llm()
             outline = [o for o in (body.get("outline") or []) if isinstance(o, dict) and str(o.get("heading", "")).strip()]
             refs = self._refs(inp["keyword"]) if body.get("use_refs", True) else []
             doc = writer.write(client, inp, body.get("title", ""), outline, refs)
-            self._remember_model(client)
+            notice = self._remember_model(client)
             plan = {"titles": body.get("titles") or [], "outline": outline, "hashtags": body.get("hashtags") or []}
-            return self._finish(body.get("id"), inp, plan, doc)
+            return {**self._finish(body.get("id"), inp, plan, doc), "notice": notice}
         if path == "/api/writer/rewrite" and method == "POST":
             d = self.store.doc_get(int(body.get("id") or 0))
             if not d:
@@ -146,12 +148,12 @@ class App:
             part = str(body.get("part", ""))
             client = self.llm()
             new = writer.rewrite_part(client, d["input"], doc, part, body.get("instruction", ""))
-            self._remember_model(client)
+            notice = self._remember_model(client)
             if part in ("intro", "outro"):
                 doc[part] = new["content"]
             else:
                 doc["sections"][int(part)] = new
-            return self._finish(d["id"], d["input"], d["plan"], doc)
+            return {**self._finish(d["id"], d["input"], d["plan"], doc), "notice": notice}
 
         if path == "/api/docs":
             return self.store.doc_list()

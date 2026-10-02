@@ -24,10 +24,9 @@ class LLMError(Exception):
         self.status = status
 
 
-def _post(url: str, headers: dict, body: dict, timeout: int = 180) -> dict:
+def _post(url: str, headers: dict, body: dict, timeout: int = 180, tries: int = 5) -> dict:
     data = json.dumps(body).encode("utf-8")
     last = ""
-    tries = 5
     for attempt in range(tries):
         req = urllib.request.Request(url, data=data, method="POST", headers={"Content-Type": "application/json", **headers})
         try:
@@ -72,6 +71,7 @@ class Gemini:
             raise LLMError("Gemini API 키가 없습니다. '설정' 탭에서 입력하세요.", 412)
         self.key, self.model, self.base = api_key, model or DEFAULT_GEMINI_MODEL, base.rstrip("/")
         self.switched_to: str | None = None
+        self.used_model: str | None = None
 
     def complete(self, system: str, user: str, json_mode: bool = True, temperature: float = 0.8) -> str:
         cfg = {"temperature": temperature, "maxOutputTokens": 16384}
@@ -80,16 +80,51 @@ class Gemini:
         body = {"systemInstruction": {"parts": [{"text": system}]},
                 "contents": [{"role": "user", "parts": [{"text": user}]}], "generationConfig": cfg}
         try:
-            d = _post(self._url(), {"x-goog-api-key": self.key}, body)
+            d = _post(self._url(), {"x-goog-api-key": self.key}, body, tries=3)
         except LLMError as e:
             # 구글이 모델을 내리면 404 메시지에 대체 모델을 알려준다("Please update your code to use models/xxx").
             m = re.search(r"use models/([A-Za-z0-9._-]+)", str(e))
-            if e.status != 404 or not m or m.group(1) == self.model:
+            if e.status == 404 and m and m.group(1) != self.model:
+                self.model = self.switched_to = m.group(1)
+                d = _post(self._url(), {"x-goog-api-key": self.key}, body, tries=3)
+            elif e.status in (429, 500, 503):
+                d = self._fallback(body, e)
+            else:
                 raise
-            self.model = m.group(1)
-            self.switched_to = self.model
-            d = _post(self._url(), {"x-goog-api-key": self.key}, body)
         return self._text(d)
+
+    def list_models(self) -> list[str]:
+        """이 키로 글 생성(generateContent)이 가능한 모델 이름 목록(구글에 직접 조회)."""
+        req = urllib.request.Request(f"{self.base}/models?pageSize=200", headers={"x-goog-api-key": self.key})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                d = json.loads(r.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, ValueError):
+            return []
+        out = []
+        for m in d.get("models", []):
+            name = str(m.get("name", "")).removeprefix("models/")
+            if "generateContent" in (m.get("supportedGenerationMethods") or []) and "gemini" in name \
+                    and not any(x in name for x in ("embedding", "image", "tts", "audio", "live", "vision", "native")):
+                out.append(name)
+        return out
+
+    def _fallback(self, body: dict, err: LLMError) -> dict:
+        """지금 모델이 혼잡/한도 초과면 같은 키로 쓸 수 있는 다른 모델로 한 번씩 시도한다."""
+        rank = lambda n: (0 if "flash" in n and "lite" not in n else 1 if "flash" in n else 2,
+                          1 if any(x in n for x in ("preview", "exp")) else 0)
+        tried = {self.model}
+        for name in sorted((n for n in self.list_models() if n not in tried), key=rank)[:4]:
+            try:
+                d = _post(f"{self.base}/models/{urllib.parse.quote(name)}:generateContent",
+                          {"x-goog-api-key": self.key}, body, tries=2)
+            except LLMError as e:
+                if e.status in (429, 500, 503, 404):
+                    continue
+                raise
+            self.used_model = name  # 이번 한 번만 대체(설정은 유지)
+            return d
+        raise err
 
     def _url(self) -> str:
         return f"{self.base}/models/{urllib.parse.quote(self.model)}:generateContent"

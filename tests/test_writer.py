@@ -210,22 +210,55 @@ def test_gemini_switches_to_suggested_model_on_404(tmp_path, monkeypatch):
     srv.shutdown(); srv2.shutdown()
 
 
-def test_gemini_busy_retries_then_friendly_error(monkeypatch):
+def test_gemini_busy_falls_back_to_listed_model(monkeypatch):
     monkeypatch.setattr(llm.time, "sleep", lambda s: None)
-    n = {"c": 0}
+    calls = []
+    state = {"all_busy": False}
+    models = {"models": [
+        {"name": "models/gemini-busy-flash", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-x-pro", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-x-flash-lite", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-x-flash", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-embedding", "supportedGenerationMethods": ["embedContent"]},
+        {"name": "models/gemini-x-flash-image", "supportedGenerationMethods": ["generateContent"]}]}
 
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a): pass
 
+        def _send(self, code, obj):
+            b = json.dumps(obj).encode()
+            self.send_response(code); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+
+        def do_GET(self):
+            self._send(200, models)
+
         def do_POST(self):
-            n["c"] += 1
             self.rfile.read(int(self.headers["Content-Length"]))
-            self.send_response(503); self.end_headers()
-            self.wfile.write(b'{"error":{"code":503,"message":"This model is currently experiencing high demand."}}')
+            calls.append(self.path.split("/models/")[1].split(":")[0])
+            if "busy" in self.path or state["all_busy"]:
+                return self._send(503, {"error": {"message": "This model is currently experiencing high demand."}})
+            self._send(200, {"candidates": [{"content": {"parts": [{"text": '{"ok": 1}'}]}}]})
 
     srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_port}/v1beta"
+    g = llm.Gemini("K", "gemini-busy-flash", base=base)
+    assert g.list_models() == ["gemini-busy-flash", "gemini-x-pro", "gemini-x-flash-lite", "gemini-x-flash"]
+    assert llm.parse_json(g.complete("s", "u")) == {"ok": 1}
+    assert calls == ["gemini-busy-flash"] * 3 + ["gemini-x-flash"]  # flash(비 lite) 우선
+    assert g.used_model == "gemini-x-flash" and g.model == "gemini-busy-flash" and g.switched_to is None
+
+    calls.clear(); state["all_busy"] = True
     with pytest.raises(llm.LLMError) as e:
-        llm.Gemini("K", "m", base=f"http://127.0.0.1:{srv.server_port}/v1beta").complete("s", "u")
-    assert n["c"] == 5 and e.value.status == 503 and "혼잡" in str(e.value) and "high demand" not in str(e.value)
+        llm.Gemini("K", "gemini-busy-flash", base=base).complete("s", "u")
+    assert e.value.status == 503 and "혼잡" in str(e.value) and "high demand" not in str(e.value)
+    assert calls[:3] == ["gemini-busy-flash"] * 3 and set(calls[3:]) == {"gemini-x-flash", "gemini-x-flash-lite", "gemini-x-pro"}
     srv.shutdown()
+
+
+def test_web_returns_fallback_notice(tmp_path, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    app, fake = make_app(tmp_path)
+    fake.used_model = "gemini-x-flash"
+    r = app.handle("POST", "/api/writer/plan", {}, {"input": {"keyword": "캠핑"}, "use_refs": False})
+    assert "gemini-x-flash" in r["notice"] and not app.settings.get("llm_model")
