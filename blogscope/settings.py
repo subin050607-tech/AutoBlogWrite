@@ -17,6 +17,11 @@ FIELDS = {
     "llm_model": "LLM_MODEL",                # 비우면 gemini-3.8-flash
     "llm_base_url": "LLM_BASE_URL",          # openai_compat 일 때
     "llm_api_key": "LLM_API_KEY",            # openai_compat 일 때
+    "image_provider": "IMAGE_PROVIDER",      # gemini(기본) | pollinations(키 없음)
+    "image_model": "IMAGE_MODEL",            # 비우면 자동 선택
+    "nickname": "BLOG_NICKNAME",             # 글 스타일: '○○의 한마디'
+    "signature": "BLOG_SIGNATURE",           # 글 끝 고정 인사말(여러 줄)
+    "style_example": "STYLE_EXAMPLE",        # '내 글 스타일' 예시 글
 }
 SECRET = {"naver_client_secret", "searchad_api_key", "searchad_secret", "gemini_api_key", "llm_api_key"}
 
@@ -37,7 +42,9 @@ class Settings:
     def update(self, values: dict) -> None:
         for k, v in values.items():
             if k in FIELDS and isinstance(v, str) and v.strip() != "":
-                self.data[k] = v.strip()
+                self.data[k] = v.strip()[:8000]
+            elif k in ("nickname", "signature", "style_example", "image_model", "llm_model") and v == "":
+                self.data.pop(k, None)  # 공개 항목은 빈 값으로 지울 수 있다
             elif k in FIELDS and v is None:  # 명시적 삭제
                 self.data.pop(k, None)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -50,6 +57,7 @@ class Settings:
             v = self.get(k)
             out[k] = (v[:4] + "•" * 6 if v and k in SECRET else v)
         out["naver_api_source"] = "developers" if self.get("naver_api_source") == "developers" else "hub"
+        out["image_provider"] = "pollinations" if self.get("image_provider") == "pollinations" else "gemini"
         out["llm_provider"] = "openai_compat" if self.get("llm_provider") == "openai_compat" else "gemini"
         out["has_llm"] = bool(self.get("gemini_api_key")) if out["llm_provider"] == "gemini" else \
             bool(self.get("llm_base_url") and self.get("llm_model"))

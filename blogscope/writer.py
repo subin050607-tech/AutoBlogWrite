@@ -50,6 +50,68 @@ PATTERNS = {
                 "rules": ["성적 향상·합격을 보장하지 않는다", "합격률 등 수치는 사용자가 준 것만 쓴다", "다른 학원 비방·비교 금지"]},
 }
 
+# 글 스타일(꾸밈). magazine 은 사용자가 보여준 블로그 글(이모지 소제목·짧은 호흡·대사 강조)을 본뜬 것.
+STYLES = {
+    "basic": ("기본", []),
+    "magazine": ("감성 정리형 (이모지 소제목·짧은 문단)", [
+        "도입부 첫 줄은 '이모지 + “핵심 문구” + 짧은 별칭' 한 줄 부제로 시작한다. 예: 🧂 “한번 맡은 일은 끝까지” 소금형",
+        "도입부는 독자가 공감할 짧은 일상 장면(상황극)으로 시작하고, 인물의 대사는 “큰따옴표” 한 줄을 단독 문단으로 둔다",
+        "한 문단은 1~2문장으로 짧게 끊고 문단 사이에는 항상 빈 줄을 둔다",
+        "섹션 소제목(heading)은 '이모지 + 질문형 문장 또는 명사구'. 예: 🧭 네 글자는 무엇을 의미할까요?",
+        "섹션 안의 세부 항목은 단독 줄 '### 이모지 짧은 소제목'(예: ### 📌 말보다 행동으로 보여줍니다) 다음에 설명 문단을 쓴다",
+        "목록은 '- ' 대신 '🌱 항목' 처럼 이모지로 시작하는 줄을 한 줄씩 빈 줄로 띄워 쓴다",
+        "장단점·대비는 '이모지 키워드' 한 줄 다음에 '→ 결과 한 줄' 형식으로 쓴다",
+        "단정 대신 '~할 수 있습니다', '~하는 경향이 있습니다' 같은 완곡한 표현을 쓰고, 고정관념·일반화를 경계하는 문단을 하나 넣는다",
+        "글 후반에 독자가 스스로 점검할 질문을 ① ② ③ … 번호로 5~9개 넣을 수 있으면 넣는다(주제에 맞을 때)",
+        "마무리(outro)는 따뜻한 메시지로 끝내고 마지막 문장 끝에 🌿 를 붙인다",
+    ]),
+    "custom": ("내 글 스타일 (예시 글 따라 쓰기)", [
+        "아래 '내 글 예시'의 말투·문장 길이·문단 호흡·소제목과 이모지 쓰는 방식·마무리 방식을 최대한 비슷하게 따라 쓴다",
+        "예시의 문장·소재·사례는 베끼지 말고 형식과 분위기만 따라 한다",
+        "세부 소제목이 필요하면 단독 줄 '### 소제목' 을 쓴다",
+    ]),
+}
+
+MAGAZINE_EXAMPLE = """🧂 “한번 맡은 일은 끝까지” ISTJ 소금형
+
+회사에서 중요한 업무를 맡게 되었습니다.
+
+처음에는 모두 의욕적으로 시작했지만 시간이 지나자 하나둘 다른 일에 신경을 쓰기 시작합니다.
+
+“마감이 금요일이니까 오늘은 여기까지 해야겠네.”
+
+화려하게 자신을 드러내지는 않지만 결국 약속했던 날짜에 정확하게 결과물을 완성합니다.
+
+## 🔍 ISTJ에게 자주 나타나는 특징
+
+### 📌 말보다 행동으로 신뢰를 보여줍니다
+
+ISTJ는 자신이 한 약속을 중요하게 생각하는 경우가 많습니다.
+
+“제가 하겠습니다.”
+
+라고 말했다면 가능하면 정해진 시간 안에 마무리하려고 합니다.
+
+🌱 역할과 책임이 명확한 환경
+
+🌱 정확성과 꼼꼼함을 활용할 수 있는 업무
+
+## ⚖️ 강점이 지나치면 어떻게 될까요?
+
+📋 책임감
+
+→ 다른 사람의 몫까지 떠맡을 수 있습니다.
+
+🔍 꼼꼼함
+
+→ 작은 실수에도 자신이나 타인을 지나치게 비판할 수 있습니다.
+
+## 🌿 해일의 심리 한마디
+
+모든 책임이 내 몫은 아닙니다.
+
+성격유형은 나를 가두는 네 글자가 아니라, 나를 조금 더 잘 이해하기 위한 하나의 지도입니다. 🌿"""
+
 SYSTEM = """당신은 네이버 블로그 원고 전문 작가입니다. 검색으로 들어온 독자에게 실제로 도움이 되는 자연스러운 한국어 글을 씁니다.
 반드시 요청한 JSON 형식 하나만 출력하세요.
 
@@ -60,6 +122,12 @@ SYSTEM = """당신은 네이버 블로그 원고 전문 작가입니다. 검색�
 - 모바일 가독성: 한 문단 2~4문장, 문단 사이 빈 줄. 필요한 곳에 '- ' 목록과 **굵게**를 쓴다.
 - 참고 글이 주어져도 문장을 베끼지 말고, 다루는 주제 범위만 참고해 더 충실하게 쓴다.
 - 광고·낚시성 표현(무조건, 대박, 100%, 최저가)을 쓰지 않는다."""
+
+
+def _lines(v) -> list[str]:
+    """여러 줄 문자열 또는 이미 정리된 목록 → 빈 줄 없는 목록(최대 5줄)."""
+    items = v if isinstance(v, list) else str(v or "").splitlines()
+    return [str(x).strip()[:200] for x in items if str(x).strip()][:5]
 
 
 def normalize(inp: dict) -> dict:
@@ -81,7 +149,13 @@ def normalize(inp: dict) -> dict:
         "extra": (inp.get("extra") or "").strip()[:1000],
         "faq": bool(inp.get("faq")),
         "photo_marks": inp.get("photo_marks", True) is not False,
+        "style": inp.get("style") if inp.get("style") in STYLES else "basic",
+        "nickname": (inp.get("nickname") or "").strip()[:30],
+        "style_example": (inp.get("style_example") or "").strip()[:6000],
+        "signature": _lines(inp.get("signature")),
     }
+    if out["style"] == "custom" and len(out["style_example"]) < 100:
+        raise ValueError("'내 글 스타일'은 설정에서 예시 글(100자 이상)을 먼저 붙여넣어야 합니다.")
     return out
 
 
@@ -104,6 +178,13 @@ def _brief(inp: dict, refs: list[dict] | None) -> str:
         lines.append(f"쓰지 말아야 할 표현: {inp['banned']}")
     if inp["extra"]:
         lines.append(f"추가 요청: {inp['extra']}")
+    name, rules = STYLES[inp["style"]]
+    if rules:
+        lines.append(f"글 스타일: {name}\n" + "\n".join(f"- {r}" for r in rules))
+        example = MAGAZINE_EXAMPLE if inp["style"] == "magazine" else inp["style_example"]
+        lines.append("<내 글 예시> (형식·호흡만 참고, 내용은 베끼지 말 것)\n" + example + "\n</내 글 예시>")
+    if inp["nickname"]:
+        lines.append(f"블로거 닉네임: {inp['nickname']}")
     if refs:
         lines.append("참고 — 현재 이 키워드 상위 노출 글(베끼지 말고 다루는 범위만 참고):\n" + "\n".join(
             f"- {r['title']}: {r.get('description', '')[:120]}" for r in refs[:8]))
@@ -138,7 +219,11 @@ def _tags(v) -> list[str]:
 
 
 def _doc_rules(inp: dict) -> str:
-    r = ['content 는 문단 사이 빈 줄, 목록은 "- ", 강조는 **굵게**, 인용은 "> " 만 사용(마크다운 제목 # 금지)']
+    if inp["style"] == "basic":
+        r = ['content 는 문단 사이 빈 줄, 목록은 "- ", 강조는 **굵게**, 인용은 "> " 만 사용(마크다운 제목 # 금지)']
+    else:
+        r = ['content 는 문단 사이 빈 줄. 세부 소제목은 단독 줄 "### ", 강조는 **굵게**. "#", "##" 는 쓰지 않는다(섹션 소제목은 heading 에만)',
+             "대사·핵심 문장은 “큰따옴표”로 감싼 한 줄을 단독 문단으로 둔다"]
     if inp["photo_marks"]:
         r.append('사진이 들어가면 좋을 위치에 단독 줄로 [사진: 어떤 사진] 을 넣는다(섹션당 0~1개)')
     return "\n".join(f"- {x}" for x in r)
@@ -150,6 +235,11 @@ def write(llm, inp: dict, title: str, outline: list[dict], refs: list[dict] | No
     ol = "\n".join(f"{i + 1}. {o['heading']}" + (f" — {', '.join(o.get('points') or [])}" if o.get("points") else "")
                    for i, o in enumerate(outline or []))
     faq = ', "faq": [{"q": "질문", "a": "답"}] (3~5개)' if inp["faq"] else ""
+    if inp["style"] == "basic":
+        outro_h = ""
+    else:
+        who = inp["nickname"] or "블로거"
+        outro_h = f', "outro_heading": "마무리 소제목(이모지 포함, 예: 🌿 {who}의 한마디)"'
     user = _brief(inp, refs) + f"""
 
 제목: {title}
@@ -162,7 +252,7 @@ def write(llm, inp: dict, title: str, outline: list[dict], refs: list[dict] | No
 JSON 형식:
 {{"title": "{title}", "intro": "도입부(독자 공감·문제 제기, 2~4문단)",
  "sections": [{{"heading": "소제목", "content": "본문"}}],
- "outro": "마무리(핵심 요약 + 행동 제안, 1~3문단)"{faq}, "hashtags": ["태그 10개"]}}"""
+ "outro": "마무리(핵심 요약 + 행동 제안, 1~3문단)"{outro_h}{faq}, "hashtags": ["태그 10개"]}}"""
     d = complete_json(llm, SYSTEM, user)
     doc = {
         "title": str(d.get("title") or title).strip(),
@@ -170,9 +260,11 @@ JSON 형식:
         "sections": [{"heading": str(s.get("heading", "")).strip(), "content": str(s.get("content", "")).strip()}
                      for s in d.get("sections", []) if isinstance(s, dict)],
         "outro": str(d.get("outro", "")).strip(),
+        "outro_heading": str(d.get("outro_heading") or "").strip()[:100] if inp["style"] != "basic" else "",
         "faq": [{"q": str(f.get("q", "")).strip(), "a": str(f.get("a", "")).strip()}
                 for f in d.get("faq", []) if isinstance(f, dict) and f.get("q")] if inp["faq"] else [],
         "hashtags": _tags(d.get("hashtags")),
+        "signature": inp["signature"],
     }
     if not doc["sections"]:
         raise ValueError("AI가 본문을 만들지 못했습니다. 다시 시도하세요.")
@@ -227,6 +319,8 @@ def clean_doc(doc) -> dict:
         "sections": [{"heading": st(x.get("heading"), 200), "content": st(x.get("content"))}
                      for x in doc["sections"][:20] if isinstance(x, dict)],
         "outro": st(doc.get("outro")),
+        "outro_heading": st(doc.get("outro_heading"), 100),
+        "signature": [st(x, 200) for x in (doc.get("signature") or [])[:5] if st(x)],
         "faq": [{"q": st(f.get("q"), 300), "a": st(f.get("a"), 3000)} for f in (doc.get("faq") or [])[:10]
                 if isinstance(f, dict) and f.get("q")],
         "hashtags": _tags(doc.get("hashtags")),
@@ -242,9 +336,10 @@ def to_text(doc: dict) -> str:
     if doc.get("faq"):
         parts.append("자주 묻는 질문")
         parts += [f"Q. {f['q']}\nA. {f['a']}" for f in doc["faq"]]
-    parts.append(doc.get("outro", ""))
+    parts += [doc.get("outro_heading", ""), doc.get("outro", "")] + list(doc.get("signature") or [])
     text = "\n\n".join(p.strip() for p in parts if p and p.strip())
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"^###\s*", "", text, flags=re.M)
     if doc.get("hashtags"):
         text += "\n\n" + " ".join("#" + t for t in doc["hashtags"])
     return text
@@ -256,6 +351,8 @@ def count_photo_marks(doc: dict) -> int:
 
 
 _P = "font-size:16px;line-height:1.8;margin:0 0 16px;"
+_SUBTITLE = re.compile(r"^[^\w\s“\"\[(#>→-]{1,3}\s*[“\"].+[”\"]")  # 이모지 + “핵심 문구” 부제
+_SAY = re.compile(r"^[“\"][^\n]{1,120}[”\"]$")  # 대사 한 줄
 
 
 def _inline(s: str) -> str:
@@ -276,6 +373,16 @@ def _blocks(text: str) -> str:
         ln = lines[i].strip()
         if not ln:
             flush()
+        elif ln.startswith("###"):
+            flush()
+            out.append(f'<p style="font-size:17px;font-weight:bold;line-height:1.7;margin:22px 0 10px;">{_inline(ln.lstrip("# "))}</p>')
+        elif _SUBTITLE.match(ln) and not para and (i + 1 >= len(lines) or not lines[i + 1].strip()):
+            out.append(f'<p style="{_P}font-size:19px;font-weight:bold;">{_inline(ln)}</p>')
+        elif _SAY.match(ln) and not para and (i + 1 >= len(lines) or not lines[i + 1].strip()):
+            out.append(f'<p style="{_P}font-size:17px;font-weight:bold;color:#333;">{_inline(ln)}</p>')
+        elif ln.startswith("→"):
+            flush()
+            out.append(f'<p style="{_P}padding-left:14px;color:#555;">{_inline(ln)}</p>')
         elif re.match(r"^\[사진:", ln):
             flush()
             out.append(f'<p style="{_P}text-align:center;color:#999;border:1px dashed #ccc;padding:18px;">📷 {_inline(ln)}</p>')
@@ -309,7 +416,11 @@ def to_html(doc: dict) -> str:
         h.append('<h3 style="font-size:20px;font-weight:bold;margin:32px 0 14px;">자주 묻는 질문</h3>')
         for f in doc["faq"]:
             h.append(f'<p style="{_P}"><b>Q. {_inline(f["q"])}</b><br>A. {_inline(f["a"])}</p>')
+    if doc.get("outro_heading"):
+        h.append(f'<h3 style="font-size:20px;font-weight:bold;margin:32px 0 14px;">{_inline(doc["outro_heading"])}</h3>')
     h.append(_blocks(doc.get("outro", "")))
+    for line in doc.get("signature") or []:
+        h.append(f'<p style="{_P}text-align:center;margin:4px 0;">{_inline(line)}</p>')
     if doc.get("hashtags"):
         h.append(f'<p style="{_P}color:#03c75a;">' + " ".join("#" + html.escape(t) for t in doc["hashtags"]) + "</p>")
     return "\n".join(x for x in h if x)
@@ -319,4 +430,5 @@ def options() -> dict:
     return {"purposes": {k: v[0] for k, v in PURPOSES.items()}, "tones": {k: v[0] for k, v in TONES.items()},
             "lengths": {k: f"{v[0]} (약 {v[1]:,}자)" for k, v in LENGTHS.items()},
             "patterns": {k: v["name"] for k, v in PATTERNS.items()},
-            "pattern_rules": {k: v["rules"] for k, v in PATTERNS.items()}}
+            "pattern_rules": {k: v["rules"] for k, v in PATTERNS.items()},
+            "styles": {k: v[0] for k, v in STYLES.items()}}

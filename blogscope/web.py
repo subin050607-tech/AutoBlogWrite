@@ -12,7 +12,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import analysis, llm, naver, writer
+import shutil
+
+from . import analysis, images, llm, naver, writer
 from .settings import Settings
 from .store import Store
 
@@ -30,8 +32,10 @@ class ApiError(Exception):
 
 class App:
     def __init__(self, settings: Settings, store: Store, rss_fetcher=None, post_fetcher=None,
-                 api_factory=None, ad_factory=None, llm_factory=None):
+                 api_factory=None, ad_factory=None, llm_factory=None, image_factory=None, images_dir=None):
         self.settings, self.store = settings, store
+        self.images_dir = Path(images_dir or "data/images")
+        self._image_factory = image_factory or self._default_image
         self._llm_factory = llm_factory or self._default_llm
         self.fetch_rss = rss_fetcher or naver.fetch_rss
         self.fetch_post = post_fetcher or naver.fetch_post
@@ -45,6 +49,19 @@ class App:
         if s.get("llm_provider") == "openai_compat":
             return llm.OpenAICompat(s.get("llm_base_url"), s.get("llm_api_key"), s.get("llm_model"))
         return llm.Gemini(s.get("gemini_api_key"), s.get("llm_model") or llm.DEFAULT_GEMINI_MODEL)
+
+    @staticmethod
+    def _default_image(s: Settings):
+        if s.get("image_provider") == "pollinations":
+            return images.Pollinations()
+        return images.GeminiImage(s.get("gemini_api_key"), s.get("image_model"))
+
+    def _inp(self, raw) -> dict:
+        """원고 입력 + 설정의 글 스타일 정보(닉네임·인사말·예시 글)."""
+        raw = dict(raw or {})
+        for k in ("nickname", "signature", "style_example"):
+            raw.setdefault(k, self.settings.get(k))
+        return writer.normalize(raw)
 
     def llm(self):
         if not self.settings.public()["has_llm"]:
@@ -86,8 +103,8 @@ class App:
         return next((x for x in rel if re.sub(r"\s+", "", x["keyword"]).lower() == k), None)
 
     def _finish(self, doc_id: int | None, inp: dict, plan: dict, doc: dict, save: bool = True) -> dict:
-        images = writer.count_photo_marks(doc) if inp.get("photo_marks") else None
-        diag = analysis.diagnose_post(doc["title"], writer.to_text(doc), inp["keyword"], images)
+        marks = writer.count_photo_marks(doc) if inp.get("photo_marks") else None
+        diag = analysis.diagnose_post(doc["title"], writer.to_text(doc), inp["keyword"], marks)
         if save:
             doc_id = self.store.doc_save(doc_id, inp["keyword"], doc["title"], inp, plan, doc)
         return {"id": doc_id, "input": inp, "plan": plan, "doc": doc, "html": writer.to_html(doc),
@@ -113,6 +130,8 @@ class App:
             raise ApiError(str(e), 502 if e.status in (0, 429) or e.status >= 500 else 400)
         except llm.LLMError as e:
             raise ApiError(str(e), e.status if e.status in (400, 401, 403, 404, 412, 429, 503) else 502)
+        except images.ImageError as e:
+            raise ApiError(str(e), e.status if e.status in (400, 401, 403, 404, 412, 429, 503) else 502)
 
     def _route(self, method, path, q, body):
         if path == "/api/settings":
@@ -123,16 +142,29 @@ class App:
 
         # ------------------------------------------------ 글쓰기
         if path == "/api/writer/options":
-            return writer.options()
+            return {**writer.options(), "image": images.options()}
+        if path == "/api/images":
+            doc_id = int(q.get("doc_id") or body.get("doc_id") or 0)
+            if not self.store.doc_get(doc_id):
+                raise ApiError("원고를 찾을 수 없습니다.", 404)
+            if method == "DELETE":
+                images.delete(self.images_dir, doc_id, q.get("name", ""))
+                return {"ok": True}
+            if method == "POST":
+                prompt = images.build_prompt(body.get("desc", ""), body.get("style", "illust"), body.get("aspect", "1:1"))
+                data, mime = self._image_factory(self.settings).generate(prompt, body.get("aspect", "1:1"))
+                name = images.save(self.images_dir, doc_id, data, mime)
+                return {"name": name, "url": f"/img/{doc_id}/{name}"}
+            return [{"name": n, "url": f"/img/{doc_id}/{n}"} for n in images.list_images(self.images_dir, doc_id)]
         if path == "/api/writer/plan" and method == "POST":
-            inp = writer.normalize(body.get("input") or {})
+            inp = self._inp(body.get("input"))
             client = self.llm()
             refs = self._refs(inp["keyword"]) if body.get("use_refs", True) else []
             res = writer.plan(client, inp, refs)
             notice = self._remember_model(client)
             return {**res, "input": inp, "refs": refs, "volume": self._volume(inp["keyword"]), "notice": notice}
         if path == "/api/writer/write" and method == "POST":
-            inp = writer.normalize(body.get("input") or {})
+            inp = self._inp(body.get("input"))
             client = self.llm()
             outline = [o for o in (body.get("outline") or []) if isinstance(o, dict) and str(o.get("heading", "")).strip()]
             refs = self._refs(inp["keyword"]) if body.get("use_refs", True) else []
@@ -167,6 +199,7 @@ class App:
                 raise ApiError("원고를 찾을 수 없습니다.", 404)
             if method == "DELETE":
                 self.store.doc_delete(doc_id)
+                shutil.rmtree(self.images_dir / str(doc_id), ignore_errors=True)
                 return {"ok": True}
             if method == "POST":  # 화면에서 직접 고친 내용 저장
                 return self._finish(doc_id, d["input"], d["plan"], writer.clean_doc(body.get("doc")))
@@ -207,14 +240,14 @@ class App:
             return {"blog_id": blog_id, "results": analysis.rank_check(self.api(required=True), blog_id, kws)}
 
         if path == "/api/post" and method == "POST":
-            title, text, images, src = body.get("title", ""), body.get("text", ""), None, "paste"
+            title, text, n_img, src = body.get("title", ""), body.get("text", ""), None, "paste"
             if body.get("url"):
                 blog_id, log_no = naver.parse_blog_ref(body["url"])
                 if not log_no:
                     raise ApiError("글 주소에 글 번호가 없습니다. 예: https://blog.naver.com/아이디/224410368545")
                 p = self.fetch_post(blog_id, log_no)
-                title, text, images, src = p["title"], p["text"], p["images"], "url"
-            rep = analysis.diagnose_post(title, text, body.get("keyword", ""), images)
+                title, text, n_img, src = p["title"], p["text"], p["images"], "url"
+            rep = analysis.diagnose_post(title, text, body.get("keyword", ""), n_img)
             rep.update(source=src, title=title)
             return rep
 
@@ -276,6 +309,13 @@ def make_handler(app: App):
             try:
                 if method == "GET" and u.path in ("/", "/index.html"):
                     return self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8", page=True)
+                if method == "GET" and u.path.startswith("/img/"):
+                    seg = u.path.split("/")
+                    f = images.path_of(app.images_dir, seg[2], seg[3]) if len(seg) == 4 else None
+                    if not f:
+                        return self._json(404, {"error": "이미지 없음"})
+                    mime = {".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp"}[f.suffix]
+                    return self._send(200, f.read_bytes(), mime)
                 if u.path == "/favicon.ico":
                     return self._send(204, b"", "image/x-icon")
                 if not u.path.startswith("/api/"):
@@ -313,7 +353,8 @@ def make_handler(app: App):
 
 
 def serve(data_dir: str = "data", port: int = 8765, open_browser: bool = True) -> None:
-    app = App(Settings(Path(data_dir) / "settings.json"), Store(Path(data_dir) / "blogscope.db"))
+    app = App(Settings(Path(data_dir) / "settings.json"), Store(Path(data_dir) / "blogscope.db"),
+              images_dir=Path(data_dir) / "images")
     srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(app))
     url = f"http://127.0.0.1:{port}"
     print(f"BlogScope 실행 중: {url}  (종료: Ctrl+C)")
