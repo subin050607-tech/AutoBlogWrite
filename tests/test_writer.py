@@ -208,3 +208,24 @@ def test_gemini_switches_to_suggested_model_on_404(tmp_path, monkeypatch):
     app.handle("POST", "/api/writer/plan", {}, {"input": {"keyword": "k"}, "use_refs": False})
     assert app.settings.get("llm_model") == "new-model-9"
     srv.shutdown(); srv2.shutdown()
+
+
+def test_gemini_busy_retries_then_friendly_error(monkeypatch):
+    monkeypatch.setattr(llm.time, "sleep", lambda s: None)
+    n = {"c": 0}
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+
+        def do_POST(self):
+            n["c"] += 1
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(503); self.end_headers()
+            self.wfile.write(b'{"error":{"code":503,"message":"This model is currently experiencing high demand."}}')
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    with pytest.raises(llm.LLMError) as e:
+        llm.Gemini("K", "m", base=f"http://127.0.0.1:{srv.server_port}/v1beta").complete("s", "u")
+    assert n["c"] == 5 and e.value.status == 503 and "혼잡" in str(e.value) and "high demand" not in str(e.value)
+    srv.shutdown()

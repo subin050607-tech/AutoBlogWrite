@@ -27,21 +27,24 @@ class LLMError(Exception):
 def _post(url: str, headers: dict, body: dict, timeout: int = 180) -> dict:
     data = json.dumps(body).encode("utf-8")
     last = ""
-    for attempt in range(4):
+    tries = 5
+    for attempt in range(tries):
         req = urllib.request.Request(url, data=data, method="POST", headers={"Content-Type": "application/json", **headers})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             text = e.read().decode("utf-8", "replace")[:400]
-            if e.code in (429, 500, 502, 503, 504) and attempt < 3:
+            if e.code in (429, 500, 502, 503, 504) and attempt < tries - 1:
                 last = f"HTTP {e.code}"
-                time.sleep(min(5 * 2 ** attempt, 30))  # 무료 한도(분당 요청 수) 초과 → 잠시 대기 후 재시도
+                time.sleep(min(5 * 2 ** attempt, 30))  # 한도 초과·서버 혼잡 → 잠시 대기 후 재시도(최대 약 1분)
                 continue
             hint = {400: "요청 오류(모델 이름을 확인하세요)", 401: "API 키가 올바르지 않습니다", 403: "API 키 권한이 없습니다",
                     404: "모델을 찾을 수 없습니다(설정의 모델 이름 확인)",
-                    429: "무료 사용 한도를 넘었습니다. 잠시 후 다시 시도하세요"}.get(e.code, "AI 호출 실패")
-            raise LLMError(f"{hint} (HTTP {e.code}) {text}", e.code) from None
+                    429: "무료 사용 한도를 넘었습니다. 1~2분 뒤(일일 한도라면 내일) 다시 시도하세요",
+                    503: "구글 AI 서버가 일시적으로 혼잡합니다. 1~2분 뒤 다시 시도하세요. 계속되면 설정에서 다른 모델로 바꿔 보세요",
+                    500: "구글 AI 서버 오류입니다. 잠시 뒤 다시 시도하세요"}.get(e.code, "AI 호출 실패")
+            raise LLMError(f"{hint} (HTTP {e.code})" + ("" if e.code in (429, 500, 503) else f" {text}"), e.code) from None
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             last = str(e)
             if attempt < 3:

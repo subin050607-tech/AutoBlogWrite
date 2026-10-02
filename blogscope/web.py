@@ -110,7 +110,7 @@ class App:
         except naver.NaverError as e:
             raise ApiError(str(e), 502 if e.status in (0, 429) or e.status >= 500 else 400)
         except llm.LLMError as e:
-            raise ApiError(str(e), e.status if e.status in (400, 401, 403, 404, 412, 429) else 502)
+            raise ApiError(str(e), e.status if e.status in (400, 401, 403, 404, 412, 429, 503) else 502)
 
     def _route(self, method, path, q, body):
         if path == "/api/settings":
