@@ -191,3 +191,42 @@ def test_example_config_is_valid_and_passes_own_example(tmp_path):
     assert c["persona"]["title_format"] and len(c["persona"]["style_guide"]) >= 8
     assert c["blog"]["heading_style"] == "plain" and len(c["blog"]["footer_lines"]) == 2
     assert Path(c["persona"]["example_file"]).exists()
+
+
+def test_anthropic_call_omits_temperature_by_default(tmp_path):
+    from autoblog.generator import AnthropicGenerator
+
+    c, *_ = mk(tmp_path)
+    seen = {}
+
+    class Msgs:
+        def create(self, **kw):
+            seen.update(kw)
+            return type("M", (), {"content": [type("B", (), {"type": "text", "text": "[]"})()]})()
+
+    g = AnthropicGenerator.__new__(AnthropicGenerator)
+    g.cfg, g.client = c, type("C", (), {"messages": Msgs()})()
+    g._complete("s", "u")
+    assert "temperature" not in seen
+    c["llm"]["temperature"] = 0.5
+    g._complete("s", "u")
+    assert seen["temperature"] == 0.5
+
+
+def test_anthropic_retries_without_temperature_when_rejected(tmp_path):
+    from autoblog.generator import AnthropicGenerator
+
+    c, *_ = mk(tmp_path)
+    c["llm"]["temperature"] = 0.8
+    calls = []
+
+    class Msgs:
+        def create(self, **kw):
+            calls.append(dict(kw))
+            if "temperature" in kw:
+                raise TypeError("Messages.create() got an unexpected keyword argument 'temperature'")
+            return type("M", (), {"content": [type("B", (), {"type": "text", "text": "ok"})()]})()
+
+    g = AnthropicGenerator.__new__(AnthropicGenerator)
+    g.cfg, g.client = c, type("C", (), {"messages": Msgs()})()
+    assert g._complete("s", "u") == "ok" and len(calls) == 2 and "temperature" not in calls[1]

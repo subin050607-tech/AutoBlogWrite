@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 DEFAULTS: dict = {
-    "llm": {"provider": "anthropic", "model": "claude-sonnet-5-5", "max_tokens": 6000, "temperature": 0.8},
+    "llm": {"provider": "anthropic", "model": "claude-sonnet-5-5", "max_tokens": 6000, "temperature": None},
     "blog": {
         "publisher": "naver",
         "endpoint": "https://api.blog.naver.com/xmlrpc",

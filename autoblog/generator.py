@@ -107,13 +107,19 @@ class AnthropicGenerator:
 
     def _complete(self, system: str, user: str) -> str:
         llm = self.cfg["llm"]
-        msg = self.client.messages.create(
-            model=llm["model"],
-            max_tokens=llm["max_tokens"],
-            temperature=llm["temperature"],
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
+        kwargs = {}
+        if llm.get("temperature") is not None:  # 모델/SDK 버전에 따라 거부될 수 있어 설정했을 때만 전달
+            kwargs["temperature"] = llm["temperature"]
+        params = dict(model=llm["model"], max_tokens=llm["max_tokens"], system=system,
+                      messages=[{"role": "user", "content": user}])
+        try:
+            msg = self.client.messages.create(**params, **kwargs)
+        except Exception as e:
+            # temperature 를 받지 않는 모델/SDK 조합이면 빼고 한 번 더 시도한다
+            if "temperature" in kwargs and "temperature" in str(e):
+                msg = self.client.messages.create(**params)
+            else:
+                raise
         return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
 
     def generate(self, topic: dict, feedback: list[str] | None = None) -> Article:

@@ -4,7 +4,7 @@ llm:
   provider: anthropic          # anthropic | mock(오프라인 테스트용)
   model: claude-sonnet-5-5
   max_tokens: 6000
-  temperature: 0.8
+  # temperature: 0.8        # 기본은 모델 기본값 사용. 주석을 풀 때 'unexpected keyword' 오류가 나면 다시 주석 처리
 
 blog:
   publisher: naver             # naver(실제 발행) | file(HTML 파일로만 저장)
