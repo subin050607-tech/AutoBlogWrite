@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BlogScope</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--fg:#1b2230;--mute:#6b7380;--line:#e2e6eb;--pri:#03c75a;--pri2:#e9f9f0;--bad:#d93025;--warn:#c27400;--info:#3b6fd8;
+--gS:#03c75a;--gA:#2f9e6e;--gB:#3b6fd8;--gC:#c27400;--gD:#d93025}
+@media(prefers-color-scheme:dark){:root{--bg:#121519;--card:#1b1f25;--fg:#e7eaf0;--mute:#9aa3b2;--line:#2b313a;--pri2:#123325;--bad:#ff6b60;--warn:#e9a23b;--info:#7aa2ff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line)}
+.hd{max-width:1080px;margin:0 auto;padding:10px 16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.logo{font-weight:800;margin-right:10px}.logo b{color:var(--pri)}
+nav button{background:none;border:0;padding:7px 11px;border-radius:7px;color:var(--mute);cursor:pointer;font:inherit}
+nav button.on{background:var(--pri);color:#fff}main{max-width:1080px;margin:18px auto;padding:0 16px 40px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+h2{font-size:17px;margin:0 0 10px}h3{font-size:15px;margin:0 0 8px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row>.grow{flex:1;min-width:200px}
+input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
+textarea{min-height:150px}
+.btn{font:inherit;cursor:pointer;background:var(--pri);color:#fff;border:1px solid var(--pri);border-radius:8px;padding:9px 16px;white-space:nowrap}
+.btn.g{background:var(--card);color:var(--fg);border-color:var(--line)}.btn.s{padding:4px 10px;font-size:13px}
+.btn:disabled{opacity:.6;cursor:wait}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--bg);border-radius:10px;padding:12px}.stat .v{font-size:22px;font-weight:700}.stat .l{color:var(--mute);font-size:13px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.score{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.big{font-size:44px;font-weight:800;line-height:1}.badge{display:inline-block;padding:3px 10px;border-radius:20px;color:#fff;font-weight:700;font-size:13px}
+.mute{color:var(--mute)}.small{font-size:13px}.err{color:var(--bad)}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top;font-size:14px}
+th{color:var(--mute);font-weight:600;font-size:13px}td.n,th.n{text-align:right;white-space:nowrap}
+.bar{height:8px;background:var(--line);border-radius:6px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--pri)}
+.tag{display:inline-block;padding:2px 9px;border-radius:12px;background:var(--bg);border:1px solid var(--line);font-size:12px;margin:2px}
+.ok{color:var(--pri)}.wa{color:var(--warn)}.no{color:var(--bad)}.in{color:var(--info)}
+ul.tips{margin:0;padding-left:18px}ul.tips li{margin:4px 0}
+a{color:var(--info)}.chart text{fill:var(--mute);font-size:10px}
+.note{background:var(--pri2);border-radius:10px;padding:12px 14px;font-size:14px}
+.disc{font-size:12px;color:var(--mute);margin-top:6px}
+#msg{position:fixed;bottom:16px;right:16px;max-width:420px;padding:11px 15px;border-radius:9px;background:var(--fg);color:var(--bg);display:none;z-index:9}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid #fff6;border-top-color:#fff;border-radius:50%;animation:r 1s linear infinite;vertical-align:-2px}
+@keyframes r{to{transform:rotate(1turn)}}
+ol.steps{padding-left:20px;margin:6px 0}ol.steps li{margin:3px 0}
+</style></head><body>
+<header><div class="hd"><span class="logo">📊 Blog<b>Scope</b></span><nav id="nav"></nav></div></header>
+<main id="main"></main><div id="msg"></div>
+<script>
+const TABS=[['blog','블로그 분석'],['kw','키워드 분석'],['rank','순위 확인'],['post','포스팅 진단'],['cmp','블로그 비교'],['hist','기록'],['set','설정']];
+let tab='blog',S={};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>n==null?'-':Number(n).toLocaleString('ko-KR');
+const dt=s=>String(s||'').replace('T',' ').replace(/\+\d\d:\d\d$/,'');
+const safeUrl=u=>/^https:\/\//.test(u||'')?esc(u):'#';
+const ls={get(k){try{return localStorage.getItem(k)||''}catch(e){return''}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+function toast(t,bad){const m=$('#msg');m.textContent=t;m.style.background=bad?'var(--bad)':'';m.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>m.style.display='none',5000)}
+async function api(method,url,body){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+ const j=await r.json().catch(()=>({error:'서버 응답 오류'}));if(!r.ok)throw new Error(j.error||r.status);return j}
+async function run(btn,fn){const t=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="spin"></span> 분석 중';try{return await fn()}catch(e){toast(e.message,true)}finally{btn.disabled=false;btn.innerHTML=t}}
+function nav(){$('#nav').innerHTML=TABS.map(([k,v])=>`<button class="${k===tab?'on':''}" data-t="${k}">${v}</button>`).join('');
+ document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>go(b.dataset.t))}
+function go(t,arg){tab=t;nav();({blog:pBlog,kw:pKw,rank:pRank,post:pPost,cmp:pCmp,hist:pHist,set:pSet})[t](arg)}
+const gcol=g=>`var(--g${g in{S:1,A:1,B:1,C:1,D:1}?g:'D'})`;
+const badge=(g,n)=>`<span class="badge" style="background:${gcol(g)}">${esc(g)} · ${esc(n)}</span>`;
+const stat=(v,l)=>`<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+const keyNeeded=what=>S.has_search?'':`<div class="note">🔑 ${what} 설정 탭에서 <b>무료 네이버 API 키</b>를 넣으면 더 정확해집니다. <a href="#" onclick="go('set');return false">설정하러 가기</a></div>`;
+
+function bars(data,h=140){if(!data||!data.length)return'<p class="mute small">데이터 없음</p>';const max=Math.max(1,...data.map(d=>d.value)),w=Math.max(18,Math.min(70,Math.floor(640/data.length)));
+ const W=w*data.length;return `<svg class="chart" viewBox="0 0 ${W} ${h+28}" style="width:100%;max-width:${W}px;max-height:${h+40}px">${data.map((d,i)=>{const bh=d.value/max*h;
+ return `<rect x="${i*w+3}" y="${h-bh+12}" width="${w-6}" height="${bh}" rx="3" fill="var(--pri)" opacity=".85"><title>${esc(d.label)}: ${d.value}</title></rect>
+ ${d.value?`<text x="${i*w+w/2}" y="${h-bh+9}" text-anchor="middle">${d.value}</text>`:''}<text x="${i*w+w/2}" y="${h+25}" text-anchor="middle">${esc(d.label)}</text>`}).join('')}</svg>`}
+function line(data,h=140,key='value',lab='label'){if(!data||data.length<2)return'<p class="mute small">2회 이상 측정하면 추이가 표시됩니다.</p>';
+ const vals=data.map(d=>d[key]??0),max=Math.max(...vals),min=Math.min(...vals),W=640,step=W/(data.length-1),y=v=>12+(max===min?h/2:(1-(v-min)/(max-min))*h);
+ const pts=vals.map((v,i)=>`${i*step},${y(v)}`).join(' ');const every=Math.ceil(data.length/8);
+ return `<svg class="chart" viewBox="-10 0 ${W+20} ${h+30}" width="100%" style="max-height:${h+40}px"><polyline points="${pts}" fill="none" stroke="var(--pri)" stroke-width="2.5"/>
+ ${vals.map((v,i)=>`<circle cx="${i*step}" cy="${y(v)}" r="3" fill="var(--pri)"><title>${esc(data[i][lab])}: ${v}</title></circle>`).join('')}
+ ${data.map((d,i)=>i%every===0||i===data.length-1?`<text x="${i*step}" y="${h+26}" text-anchor="middle">${esc(String(d[lab]).slice(2,10))}</text>`:'').join('')}</svg>`}
+
+/* ---------------- 블로그 분석 ---------------- */
+function pBlog(pre){$('#main').innerHTML=`<div class="card"><h2>블로그 분석</h2><p class="mute small">블로그 아이디나 주소를 넣으면 활동량·꾸준함·최근성·검색 노출을 분석해 점수를 매깁니다.</p>
+ <div class="row"><input class="grow" id="bid" placeholder="예: kth7405 또는 https://blog.naver.com/kth7405" value="${esc(pre||ls.get('bid'))}"><button class="btn" id="go">분석</button></div></div>
+ ${keyNeeded('검색 노출(누락 의심 글) 측정은 API 키가 필요합니다.')}<div id="out"></div>`;
+ const f=refresh=>run($('#go'),async()=>{const b=$('#bid').value.trim();ls.set('bid',b);showBlog(await api('POST','/api/blog',{blog:b,refresh}))});
+ $('#go').onclick=()=>f(false);$('#bid').onkeydown=e=>{if(e.key==='Enter')f(false)};window._refreshBlog=()=>f(true);if(pre)f(false)}
+function showBlog(r){const m=r.metrics,b=r.blog;
+ $('#out').innerHTML=`<div class="card"><div class="score"><div><div class="big" style="color:${gcol(r.grade)}">${r.score}</div><div class="mute small">/ 100</div></div>
+ <div class="grow"><h2 style="margin:0">${esc(b.title)} <a class="small" href="${safeUrl(b.link)}" target="_blank" rel="noopener">${esc(b.blog_id)} ↗</a></h2>
+ <div style="margin:6px 0">${badge(r.grade,r.name)} ${r.cached?'<span class="tag">캐시된 결과</span>':''}</div><div class="mute small">${esc(b.description)}</div>
+ <div class="mute small">측정: ${esc(dt(r.measured_at))} <button class="btn g s" onclick="_refreshBlog()">새로 측정</button></div></div></div>
+ <div style="margin-top:14px">${r.components.map(c=>`<div style="margin:9px 0"><div class="row" style="justify-content:space-between"><b>${esc(c.name)} <span class="mute small">(비중 ${c.weight}%)</span></b><b>${c.score}</b></div>
+ <div class="bar"><i style="width:${c.score}%;background:${c.score>=75?'var(--pri)':c.score>=40?'var(--warn)':'var(--bad)'}"></i></div><div class="mute small">${esc(c.basis)}</div></div>`).join('')}</div>
+ <p class="disc">ⓘ ${esc(r.disclaimer)}</p></div>
+ <div class="card"><h3>💡 개선 포인트</h3><ul class="tips">${r.tips.map(t=>`<li>${esc(t)}</li>`).join('')}</ul></div>
+ <div class="card"><div class="grid">${stat(fmt(m.recent7),'최근 7일 발행')}${stat(fmt(m.recent30),'최근 30일 발행')}${stat(m.last_post_days??'-','마지막 발행(일 전)')}${stat(m.avg_interval_days??'-','평균 발행 간격(일)')}${stat(fmt(m.posts_in_rss),'분석한 최근 글 수')}</div>
+ <p class="disc">RSS로 공개되는 최근 글(최대 약 50개)을 기준으로 합니다.</p></div>
+ ${r.exposure.length?`<div class="card"><h3>🔎 최근 글 검색 노출 (제목 그대로 검색)</h3><table><tr><th>글</th><th>발행</th><th class="n">순위</th></tr>${r.exposure.map(e=>`<tr><td><a href="${safeUrl(e.link)}" target="_blank" rel="noopener">${esc(e.title)}</a></td><td class="mute small">${esc((e.date||'').slice(0,10))}</td>
+ <td class="n">${e.status==='top10'?`<b class="ok">${e.rank}위</b>`:e.status==='found'?`<span class="wa">${e.rank}위</span>`:e.status==='missing'?'<b class="no">누락 의심</b>':e.status==='pending'?'<span class="mute">색인 대기</span>':'<span class="mute">확인 실패</span>'}</td></tr>`).join('')}</table>
+ <p class="disc">네이버 검색 API(블로그, 정확도순) 상위 100개 기준입니다. 실제 통합검색 화면 순위와는 다를 수 있습니다.</p></div>`:''}
+ <div class="cols"><div class="card"><h3>월별 발행 수</h3>${bars(m.monthly)}</div><div class="card"><h3>요일별 발행</h3>${bars(m.weekday)}</div></div>
+ <div class="card"><h3>시간대별 발행</h3>${bars(m.hours,110)}</div>
+ <div class="cols"><div class="card"><h3>카테고리</h3>${m.categories.map(c=>`<span class="tag">${esc(c.label)} ${c.value}</span>`).join('')||'<span class="mute">없음</span>'}</div>
+ <div class="card"><h3>자주 쓴 태그</h3>${m.top_tags.map(c=>`<span class="tag">#${esc(c.label)} ${c.value}</span>`).join('')||'<span class="mute">없음</span>'}</div></div>
+ ${r.history?`<div class="card"><h3>점수 추이</h3>${line(r.history,120,'score','at')}</div>`:''}
+ <div class="card"><h3>최근 글</h3><table>${r.recent_posts.map(p=>`<tr><td><a href="${safeUrl(p.link)}" target="_blank" rel="noopener">${esc(p.title)}</a></td><td class="mute small">${esc(p.category)}</td><td class="mute small n">${esc((p.date||'').slice(0,10))}</td></tr>`).join('')}</table></div>`}
+
+/* ---------------- 키워드 분석 ---------------- */
+function pKw(pre){$('#main').innerHTML=`<div class="card"><h2>키워드 분석</h2><p class="mute small">월간 검색량, 블로그 발행량, 포화도, 연관 키워드, 상위 노출 글을 한 번에 봅니다.</p>
+ <div class="row"><input class="grow" id="kw" placeholder="예: 강남역 맛집" value="${esc(pre||'')}"><button class="btn" id="go">분석</button></div></div>
+ ${S.has_search||S.has_searchad?'':keyNeeded('키워드 분석에는')}<div id="out"></div>`;
+ const f=(refresh)=>run($('#go'),async()=>showKw(await api('POST','/api/keyword',{keyword:$('#kw').value,refresh})));
+ $('#go').onclick=()=>f(false);$('#kw').onkeydown=e=>{if(e.key==='Enter')f(false)};window._refreshKw=()=>f(true);if(pre)f(false)}
+function showKw(r){const v=r.volume;window._rel=r.related;
+ $('#out').innerHTML=`${r.notes.map(n=>`<div class="note" style="margin-bottom:10px">ℹ️ ${esc(n)}</div>`).join('')}
+ <div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">“${esc(r.keyword)}”</h2><span class="mute small">${r.cached?'캐시된 결과 · ':''}${esc(dt(r.measured_at))} <button class="btn g s" onclick="_refreshKw()">새로 분석</button></span></div>
+ <div class="grid" style="margin-top:12px">${stat(v?fmt(v.total):'-','월간 검색량')}${stat(v?fmt(v.pc):'-','PC')}${stat(v?fmt(v.mobile):'-','모바일')}${stat(fmt(r.blog_total),'블로그 누적 발행량')}${stat(r.monthly_new_posts==null?'-':'약 '+fmt(r.monthly_new_posts),'최근 월 발행 추정')}${stat(v?esc(v.comp||'-'):'-','광고 경쟁도')}</div>
+ <div style="margin-top:14px" class="score"><div>${badge(r.grade.grade,r.grade.name)}</div><div class="grow"><b>포화도 ${r.saturation??'-'}</b> <span class="mute small">(누적 발행량 ÷ 월간 검색량, 낮을수록 유리)</span><div class="small">${esc(r.grade.desc)}</div>${r.freshness?`<div class="small mute">🕒 ${esc(r.freshness)} (상위 10개 글 평균 ${r.top_avg_age_days}일 전 발행)</div>`:''}</div></div>
+ <p class="disc">ⓘ 포화도 등급은 블로거들이 흔히 쓰는 경험칙이며, 실제 노출 난이도는 블로그 상태에 따라 다릅니다.</p></div>
+ ${r.trend.length?`<div class="card"><h3>최근 1년 검색 추이 <span class="mute small">(네이버 데이터랩, 기간 내 최대값=100)</span></h3>${line(r.trend,120,'ratio','period')}</div>`:''}
+ ${r.related.length?`<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">연관 키워드 ${r.related.length}개</h3><button class="btn g s" onclick="csv()">CSV 저장</button></div>
+ <table><tr><th>키워드</th><th class="n">PC</th><th class="n">모바일</th><th class="n">합계</th><th>경쟁도</th><th></th></tr>${r.related.map((k,i)=>`<tr><td>${esc(k.keyword)}</td><td class="n">${fmt(k.pc)}</td><td class="n">${fmt(k.mobile)}</td><td class="n"><b>${fmt(k.total)}</b></td><td>${esc(k.comp)}</td><td class="n"><button class="btn g s" data-i="${i}">분석</button></td></tr>`).join('')}</table></div>`:''}
+ ${r.top_posts.length?`<div class="card"><h3>상위 노출 글 (블로그 검색 정확도순)</h3><table>${r.top_posts.map(p=>`<tr><td class="n" style="width:36px">${p.rank}</td><td><a href="${safeUrl(p.link)}" target="_blank" rel="noopener">${esc(p.title)}</a><div class="mute small">${esc(p.blogger)}</div></td><td class="mute small n">${esc(p.date.replace(/(\d{4})(\d\d)(\d\d)/,'$1-$2-$3'))}</td></tr>`).join('')}</table></div>`:''}`;
+ document.querySelectorAll('#out button[data-i]').forEach(b=>b.onclick=()=>{$('#kw').value=r.related[+b.dataset.i].keyword;window.scrollTo(0,0);$('#go').click()})}
+function csv(){const rows=[['키워드','PC','모바일','합계','경쟁도'],...(window._rel||[]).map(k=>[k.keyword,k.pc,k.mobile,k.total,k.comp])];
+ const q=v=>{v=String(v);if(/^[=+\-@]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"'};
+ const blob=new Blob(['﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='연관키워드.csv';a.click()}
+
+/* ---------------- 순위 확인 ---------------- */
+function pRank(){$('#main').innerHTML=`<div class="card"><h2>순위 확인</h2><p class="mute small">내 블로그 글이 키워드별로 블로그 검색 몇 위에 있는지 확인합니다(최대 20개, 상위 100위까지).</p>
+ <input id="bid" placeholder="블로그 아이디 또는 주소" value="${esc(ls.get('bid'))}"><p></p><textarea id="kws" style="min-height:110px" placeholder="키워드를 한 줄에 하나씩">${esc(ls.get('rkws'))}</textarea>
+ <p><button class="btn" id="go">순위 확인</button></p></div>${keyNeeded('순위 확인은 검색 API 키가 있어야 합니다.')}<div id="out"></div>`;
+ $('#go').onclick=()=>run($('#go'),async()=>{ls.set('bid',$('#bid').value);ls.set('rkws',$('#kws').value);
+  const r=await api('POST','/api/rank',{blog:$('#bid').value,keywords:$('#kws').value});
+  $('#out').innerHTML=`<div class="card"><table><tr><th>키워드</th><th class="n">순위</th><th>노출된 글</th><th class="n">전체 문서</th></tr>${r.results.map(x=>`<tr><td>${esc(x.keyword)}</td>
+  <td class="n">${x.rank?`<b class="${x.rank<=10?'ok':'wa'}">${x.rank}위</b>`:'<span class="mute">100위 밖</span>'}</td><td>${x.link?`<a href="${safeUrl(x.link)}" target="_blank" rel="noopener">${esc(x.title)}</a>`:''}</td><td class="n mute">${fmt(x.total)}</td></tr>`).join('')}</table>
+  <p class="disc">네이버 검색 API(블로그, 정확도순) 기준입니다. 실제 검색 화면(통합검색·스마트블록)과는 다를 수 있습니다.</p></div>`})}
+
+/* ---------------- 포스팅 진단 ---------------- */
+function pPost(){$('#main').innerHTML=`<div class="card"><h2>포스팅 진단</h2><p class="mute small">글 주소를 넣거나 제목·본문을 붙여넣으면 분량·키워드·가독성·중복·광고성 표현을 점검합니다. 발행 전 초안도 진단할 수 있어요.</p>
+ <div class="row"><input class="grow" id="url" placeholder="글 주소 (예: https://blog.naver.com/아이디/224410368545)"><input id="pkw" placeholder="목표 키워드(선택)" style="max-width:220px"></div>
+ <p class="mute small">또는 직접 붙여넣기 (주소를 비워두세요)</p><input id="pt" placeholder="제목"><p></p><textarea id="pb" placeholder="본문"></textarea>
+ <p><button class="btn" id="go">진단</button></p></div><div id="out"></div>`;
+ $('#go').onclick=()=>run($('#go'),async()=>{const u=$('#url').value.trim();
+  const r=await api('POST','/api/post',u?{url:u,keyword:$('#pkw').value}:{title:$('#pt').value,text:$('#pb').value,keyword:$('#pkw').value});
+  const ic={good:'<b class="ok">✔</b>',warn:'<b class="wa">▲</b>',bad:'<b class="no">✖</b>',info:'<b class="in">ⓘ</b>'},st=r.stats;
+  $('#out').innerHTML=`<div class="card"><div class="score"><div><div class="big" style="color:${gcol(r.grade)}">${r.score}</div><div class="mute small">/ 100</div></div>
+  <div class="grow"><h2 style="margin:0">${esc(r.title||'(제목 없음)')}</h2><div style="margin-top:6px">${badge(r.grade,r.name)} <span class="tag">${r.source==='url'?'주소에서 가져옴':'붙여넣기'}</span></div></div></div>
+  <table style="margin-top:12px">${r.checks.map(c=>`<tr><td style="width:28px">${ic[c.status]}</td><td style="width:140px"><b>${esc(c.name)}</b></td><td>${esc(c.msg)}</td></tr>`).join('')}</table><p class="disc">ⓘ ${esc(r.disclaimer)}</p></div>
+  <div class="card"><div class="grid">${stat(fmt(st.chars),'글자 수(공백 제외)')}${stat(fmt(st.chars_with_spaces),'글자 수(공백 포함)')}${stat(fmt(st.paragraphs),'문단')}${stat(fmt(st.sentences),'문장')}${stat(st.images==null?'-':st.images,'이미지')}${stat(fmt(st.keyword_count),'키워드 횟수')}</div></div>
+  <div class="card"><h3>많이 쓴 단어</h3>${bars(st.top_words,110)}</div>`})}
+
+/* ---------------- 블로그 비교 ---------------- */
+function pCmp(){$('#main').innerHTML=`<div class="card"><h2>블로그 비교</h2><p class="mute small">내 블로그와 경쟁 블로그를 최대 3개까지 나란히 비교합니다.</p>
+ <div class="row"><input class="grow" id="c1" placeholder="블로그 1" value="${esc(ls.get('bid'))}"><input class="grow" id="c2" placeholder="블로그 2"><input class="grow" id="c3" placeholder="블로그 3 (선택)"></div><p><button class="btn" id="go">비교</button></p></div><div id="out"></div>`;
+ $('#go').onclick=()=>run($('#go'),async()=>{const r=await api('POST','/api/compare',{blogs:[$('#c1').value,$('#c2').value,$('#c3').value]});const bs=r.blogs,ok=bs.filter(b=>!b.error);
+  const rowsM=[['점수',b=>`<b style="color:${gcol(b.grade)}">${b.score}</b> ${badge(b.grade,b.name)}`],['최근 7일 발행',b=>fmt(b.metrics.recent7)],['최근 30일 발행',b=>fmt(b.metrics.recent30)],['마지막 발행(일 전)',b=>b.metrics.last_post_days??'-'],['평균 발행 간격(일)',b=>b.metrics.avg_interval_days??'-']];
+  const names=[...new Set(ok.flatMap(b=>b.components.map(c=>c.name)))];
+  $('#out').innerHTML=`<div class="card"><table><tr><th></th>${bs.map(b=>`<th>${esc(b.title||b.blog_id)}<div class="mute small">${esc(b.blog_id)}</div></th>`).join('')}</tr>
+  ${rowsM.map(([n,f])=>`<tr><td><b>${n}</b></td>${bs.map(b=>`<td>${b.error?`<span class="err small">${esc(b.error)}</span>`:f(b)}</td>`).join('')}</tr>`).join('')}
+  ${names.map(n=>`<tr><td>${esc(n)}</td>${bs.map(b=>{const c=b.components&&b.components.find(x=>x.name===n);return `<td>${c?`${c.score}<div class="bar"><i style="width:${c.score}%"></i></div>`:'-'}</td>`}).join('')}</tr>`).join('')}</table></div>`})}
+
+/* ---------------- 기록 ---------------- */
+async function pHist(){const [b,k]=await Promise.all([api('GET','/api/history?kind=blog'),api('GET','/api/history?kind=keyword')]);
+ const tb=(rows,kind)=>rows.length?`<table>${rows.map(r=>`<tr><td><a href="#" data-k="${esc(r.key)}" data-kind="${kind}">${esc(r.title||r.key)}</a> <span class="mute small">${kind==='blog'?esc(r.key):''}</span></td>
+  <td class="n">${r.score==null?'-':kind==='blog'?r.score+'점':fmt(r.score)+'회'}</td><td class="mute small n">${esc(r.at.replace('T',' ').slice(0,16))} · ${r.n}회</td><td class="n"><button class="btn g s" data-del="${esc(r.key)}" data-kind="${kind}">삭제</button></td></tr>`).join('')}</table>`:'<p class="mute">기록 없음</p>';
+ $('#main').innerHTML=`<div class="card"><h2>블로그 분석 기록</h2>${tb(b,'blog')}</div><div class="card"><h2>키워드 분석 기록 <span class="mute small">(숫자는 월간 검색량)</span></h2>${tb(k,'keyword')}</div>`;
+ document.querySelectorAll('a[data-k]').forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.kind==='blog'?'blog':'kw',a.dataset.k)});
+ document.querySelectorAll('button[data-del]').forEach(x=>x.onclick=async()=>{if(!confirm('이 기록을 삭제할까요?'))return;await api('DELETE',`/api/history?kind=${x.dataset.kind}&key=${encodeURIComponent(x.dataset.del)}`);pHist()})}
+
+/* ---------------- 설정 ---------------- */
+function pSet(){const f=(id,l,ph)=>`<label class="small"><b>${l}</b></label><input id="${id}" placeholder="${esc(ph)}" value="${esc(String(S[id]||'').includes('•')?'':S[id]||'')}" autocomplete="off"><p></p>`;
+ $('#main').innerHTML=`<div class="card"><h2>① 네이버 검색 API ${S.has_search?'<span class="ok">● 연결됨</span>':'<span class="mute">○ 미설정</span>'}</h2>
+ <p class="small mute">블로그 검색 노출·순위 확인·발행량·검색 추이에 사용합니다. <b>무료</b> (검색 하루 25,000회, 데이터랩 하루 1,000회)</p>
+ <ol class="steps small"><li><a href="https://developers.naver.com/apps/#/register" target="_blank" rel="noopener">네이버 개발자센터 → 애플리케이션 등록</a></li>
+ <li>사용 API에서 <b>검색</b>과 <b>데이터랩(검색어트렌드)</b>를 추가</li><li>환경 추가 → <b>WEB 설정</b>, 서비스 URL에 <code>http://127.0.0.1</code></li><li>발급된 Client ID / Client Secret 을 아래에 입력</li></ol>
+ ${f('naver_client_id','Client ID','')}${f('naver_client_secret','Client Secret',S.naver_client_secret?'저장됨 — 바꿀 때만 입력':'')}</div>
+ <div class="card"><h2>② 네이버 검색광고 API ${S.has_searchad?'<span class="ok">● 연결됨</span>':'<span class="mute">○ 미설정</span>'}</h2>
+ <p class="small mute">월간 검색량(PC/모바일)과 연관 키워드에 사용합니다. <b>무료</b> — 광고비를 쓰지 않아도 발급됩니다.</p>
+ <ol class="steps small"><li><a href="https://searchad.naver.com" target="_blank" rel="noopener">네이버 검색광고</a> 가입 후 광고시스템 접속</li><li>상단 <b>도구 → API 사용 관리</b> → 네이버 검색광고 API 서비스 신청</li><li>엑세스라이선스, 비밀키, CUSTOMER_ID 를 아래에 입력</li></ol>
+ ${f('searchad_api_key','엑세스라이선스 (API KEY)',S.searchad_api_key?'저장됨 — 바꿀 때만 입력':'')}${f('searchad_secret','비밀키 (SECRET KEY)',S.searchad_secret?'저장됨 — 바꿀 때만 입력':'')}${f('searchad_customer_id','CUSTOMER_ID','')}</div>
+ <div class="card"><button class="btn" id="save">저장</button> <span class="mute small">키는 이 컴퓨터의 data/settings.json 에만 저장되며 외부로 보내지 않습니다(네이버 API 호출 제외).</span></div>`;
+ $('#save').onclick=()=>run($('#save'),async()=>{const v={};['naver_client_id','naver_client_secret','searchad_api_key','searchad_secret','searchad_customer_id'].forEach(k=>{const x=$('#'+k).value.trim();if(x)v[k]=x});
+  S=await api('POST','/api/settings',v);toast('저장했습니다');pSet()})}
+
+(async()=>{try{S=await api('GET','/api/settings')}catch(e){}go('blog')})();
+</script>
+</body></html>

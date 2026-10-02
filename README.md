@@ -1,107 +1,66 @@
-# AutoBlogWrite — 네이버 블로그 자동 작성·발행
+# BlogScope — 네이버 블로그 분석 도구
 
-주제(키워드)만 등록하면 **글 생성 → 품질검사 → 네이버용 HTML 변환 → 발행 → 이력 기록**까지 자동으로 처리하고,
-스케줄러가 사람처럼 불규칙한 간격으로 하루 발행량을 조절합니다.
+블덱스(blogdex)처럼 **블로그 진단 · 키워드 분석 · 순위 확인 · 포스팅 진단 · 블로그 비교**를 내 컴퓨터에서 무료로 쓰는 프로그램입니다.
+설치할 추가 패키지가 없습니다(파이썬만 있으면 됨).
 
-## 요구사항 정리
+## 실행
 
-| 구분 | 내용 |
-|---|---|
-| 글 생성 | Claude API로 제목·본문·태그 생성, 블로그 성격/톤/독자/분량/공통 규칙을 설정으로 지정, 주제별 메모·톤·이미지 지정 |
-| 주제 관리 | 키워드 큐(SQLite), 우선순위, 파일 일괄 등록, LLM 주제 추천(`suggest`), 중복 키워드 차단 |
-| 품질 보장 | 최소/최대 글자수, 소제목 수, 제목 내 키워드, 키워드 밀도 상한(스팸 방지), 금지어, **기존 제목과 유사도(중복 글 방지)** → 실패 시 문제점을 피드백으로 넣어 자동 재생성 |
-| 네이버 서식 | `class`/`<style>` 이 제거되므로 인라인 스타일 HTML로 변환, 이미지 업로드·삽입, 태그, AI 작성 고지 문구 |
-| 발행 | 네이버 공식 XML-RPC(MetaWeblog) API (`naver`) / HTML 파일 저장 (`file`, 검수·드라이런) |
-| 스케줄 | 활동 시간대, 하루 한도, 최소 간격 + 랜덤 지터 |
-| 안전장치 | 실패 주제는 `failed` + 사유 기록 후 다음 주제 진행, `preview` 는 이력/큐에 영향 없음, 비밀값은 `.env` 로 분리 |
+```powershell
+git clone -b claude/inspiring-mayer-hqfxnv https://github.com/subin050607-tech/AutoBlogWrite.git
+cd AutoBlogWrite
+python -m blogscope
+```
 
-## 설치
+브라우저가 자동으로 `http://127.0.0.1:8765` 를 엽니다. 윈도우에서는 폴더의 **`실행.bat`** 을 더블클릭해도 됩니다.
+끄려면 검은 창에서 `Ctrl+C`.
+
+## 기능
+
+| 메뉴 | 내용 | 필요한 키 |
+|---|---|---|
+| 블로그 분석 | 점수(0~100)·등급, 항목별 근거(활동량·꾸준함·최근성·검색 노출), 누락 의심 글, 월/요일/시간대별 발행, 카테고리·태그, 점수 추이, 개선 포인트 | 없음 (검색 노출은 검색 API) |
+| 키워드 분석 | 월간 검색량(PC/모바일), 블로그 누적 발행량, 최근 월 발행 추정, 포화도 등급, 1년 검색 추이, 연관 키워드(CSV 저장), 상위 노출 글 | 검색 API / 검색광고 API |
+| 순위 확인 | 키워드별 내 블로그 글 순위(상위 100위) | 검색 API |
+| 포스팅 진단 | 글 주소 또는 붙여넣은 초안: 제목·키워드·분량·이미지·문단·긴 문장·중복 문장·반복 단어·광고성 표현·연락처 | 없음 |
+| 블로그 비교 | 최대 3개 블로그를 나란히 비교 | 없음 (검색 노출은 검색 API) |
+| 기록 | 분석 기록과 점수 추이, 다시 보기·삭제 | - |
+
+## 무료 API 키 (설정 탭에서 입력)
+
+1. **네이버 검색 API** — [developers.naver.com](https://developers.naver.com/apps/#/register) 에서 애플리케이션 등록
+   → 사용 API: **검색**, **데이터랩(검색어트렌드)** → WEB 환경 `http://127.0.0.1` → Client ID/Secret. 무료(검색 25,000회/일).
+2. **네이버 검색광고 API** — [searchad.naver.com](https://searchad.naver.com) 가입 → 도구 → API 사용 관리. 광고비 없이 무료 발급.
+
+키는 `data/settings.json` 에만 저장됩니다. 키가 없어도 블로그 분석·포스팅 진단은 동작합니다.
+
+## 점수 계산 방식 (공개)
+
+**네이버는 공식 '블로그 지수'를 공개하지 않습니다.** 이 프로그램의 점수는 공개 데이터로 계산한 자체 추정치입니다.
+
+- 활동량 30% — 최근 30일 발행 수 (12개 이상 만점)
+- 꾸준함 20% — 최근 글 발행 간격의 변동계수 (규칙적일수록 높음)
+- 최근성 15% — 마지막 발행 경과일 (3일 이내 만점, 30일 이상 0점)
+- 검색 노출 35% — 최근 글 10개 제목을 그대로 검색했을 때 내 글 순위 (3위 이내 1.0 · 10위 0.85 · 30위 0.5 · 100위 0.25 · 100위 밖 0 = 누락 의심). API 키가 없으면 이 항목을 빼고 나머지로 계산
+- 등급: S 90+ · A 75+ · B 60+ · C 40+ · D
+
+키워드 포화도 = 블로그 누적 발행량 ÷ 월간 검색량 (0.5 미만 블루오션 … 50 이상 레드오션, 경험칙).
+
+## 한계
+
+- 블로그 데이터는 공개 RSS(최근 글 약 50개)를 사용합니다. 비공개 블로그나 RSS를 막은 블로그는 분석할 수 없습니다.
+- 순위·노출은 **네이버 검색 API(블로그 검색, 정확도순)** 기준이라 실제 통합검색·스마트블록 화면 순위와 다를 수 있습니다.
+- 글 주소 진단은 네이버 글 페이지를 읽어 본문을 추출합니다. 네이버가 페이지 구조를 바꾸면 실패할 수 있으니 그때는 본문을 붙여넣으세요.
+- 방문자 수 등 블로그 주인만 보는 통계는 수집하지 않습니다.
+
+## 개발
 
 ```bash
-pip install -e .          # 또는: pip install pyyaml anthropic
-autoblog init             # config.yaml, .env 생성
+pip install pytest && python -m pytest
 ```
 
-`.env` 에 입력:
-- `ANTHROPIC_API_KEY`
-- `NAVER_BLOG_ID` — blog.naver.com/**아이디**
-- `NAVER_API_PASSWORD` — 네이버 블로그 관리 → 글 API(외부 연동) 설정에서 만드는 **API 연동 비밀번호** (로그인 비밀번호가 아닙니다)
-
-```bash
-autoblog check            # 네이버 API 연결 확인
 ```
-
-## 사용법
-
-```bash
-autoblog add "제주도 3박4일 여행 코스" --category 여행 --notes "렌터카 기준" --images jeju1.jpg,jeju2.jpg
-autoblog add-file topics.txt            # 한 줄에 키워드 하나 (# 주석 가능)
-autoblog suggest "캠핑" -n 10 --save    # LLM 주제 추천 후 큐 등록
-
-autoblog preview                        # 발행 없이 output/*.html 로 결과 검수
-autoblog post                           # 다음 주제 1건 즉시 발행 (--id N 으로 지정)
-autoblog run                            # 스케줄러 상시 실행
-autoblog list --status failed           # 큐 / 실패 사유 확인
-autoblog history                        # 발행 이력
-```
-
-이미지는 `images/<주제ID>/` 또는 `images/` 에서 파일명으로 찾아 네이버에 업로드합니다.
-API 키 없이 흐름만 시험하려면 `config.yaml` 에 `llm.provider: mock`, `blog.publisher: file` 로 설정하세요.
-
-cron 으로 돌리려면 `autoblog run` 대신 `*/30 * * * * autoblog post` 처럼 `post` 를 쓸 수 있습니다(이 경우 스케줄 규칙은 적용되지 않음).
-
-## 무료 AI 제공자 사용
-
-`config.yaml` 의 `llm` 을 `provider: openai_compat` 로 바꾸고 `base_url`/`model` 을 채운 뒤, 발급받은 키를 `.env` 의 `LLM_API_KEY` 에 넣습니다.
-예시(Gemini, 무료 한도 있음): `base_url: https://generativelanguage.googleapis.com/v1beta/openai`, `model: gemini-2.5-flash`.
-Groq·OpenRouter·내 PC의 Ollama(`api_key_env: ""`)도 같은 방식입니다. 무료 한도·모델명은 자주 바뀌니 각 서비스에서 확인하세요.
-한도(429) 초과 시 자동으로 대기 후 재시도하지만, 무료 모델은 긴 글의 품질·형식 준수가 떨어질 수 있어 `preview` 로 먼저 확인하세요.
-
-## 웹 UI (대시보드·편집·예약)
-
-```bash
-autoblog web            # http://127.0.0.1:8765  (--port, --no-scheduler)
-```
-
-키워드 등록 → **AI 제목 후보 → AI 목차 → 이미지 업로드 → 초안 생성** → 편집/임시저장 → **검수** → 즉시 발행 또는 **시각 지정 예약** → 이력/CSV.
-글 상태: 작성 중 → 검수 완료 → 예약 발행 → 발행 완료 / 발행 실패.
-
-- **검수를 통과(이슈 0건)한 글만** 예약·발행할 수 있습니다. 편집하면 검수 결과가 무효화되어 다시 검수합니다.
-- 웹 UI 가 켜져 있는 동안 예약 시각이 지난 글을 자동 발행하며, 실패 시 10분 뒤 `schedule.max_retries`(기본 2)회까지 재시도합니다.
-- 보안: `127.0.0.1` 에만 바인딩, Host 헤더 검증, JSON 요청만 허용합니다. **인증이 없으니 외부에 노출하지 마세요.**
-- 기존 CLI 자동 모드(`post`/`run`)는 그대로 있으며, 사람 검수 없이 큐에서 바로 발행합니다.
-
-## 구현 범위 (기획서 기준)
-
-| 단계 | 상태 |
-|---|---|
-| MVP 1단계 10개 (키워드·제목/목차/본문 생성·이미지 업로드·검수·네이버 연동·임시저장·예약·이력) | 구현 |
-| 대시보드·글 상태 관리·CSV 내보내기·실패 재시도·글 복사 | 구현 |
-| 웹 자료조사, 연관 키워드 수집, AI 이미지 생성, 여러 블로그, 발행 캘린더, 통계, 알림, 글 버전 관리 | 미구현 (2단계) |
-| 자동 콘텐츠 기획·성과 분석 등 | 미구현 (3단계) |
-
-## 구조
-
-```
-autoblog/
-  config.py     설정/.env 로딩        generator.py  Claude·mock 글 생성
-  db.py         주제 큐·발행 이력     quality.py    발행 전 품질검사
-  render.py     마크다운→네이버 HTML  publishers.py 네이버 XML-RPC / 파일
-  pipeline.py   1건 처리 흐름         scheduler.py  시간대·한도·간격
-  cli.py        명령행              workflow.py   초안→검수→예약→발행 상태 전이
-  web.py        웹 UI/JSON API      static/       UI(index.html)
-tests/          pytest (가짜 XML-RPC 서버로 발행 검증)
-```
-
-## 주의사항 (꼭 읽어주세요)
-
-- **네이버 XML-RPC 실연동은 이 개발 환경에서 검증하지 못했습니다.** 테스트는 가짜 서버로 호출 형태만 검증합니다. 처음에는 `autoblog check` → `blog.publish: false` 또는 `preview` 로 먼저 확인하세요. 네이버가 API 사양(태그/카테고리 필드 처리 등)을 바꿨다면 `publishers.py` 의 `NaverPublisher` 만 수정하면 됩니다.
-- 자동 생성 글을 **검토 없이 대량 발행**하면 네이버 검색 품질 정책(저품질·유사문서)에 불리할 수 있습니다. 하루 한도를 낮게 유지하고 `preview` 로 샘플을 확인하세요.
-- 생성 글의 사실관계(장소·가격·영업시간 등)는 모델이 확인할 수 없으니 `--notes` 로 근거 정보를 주거나 직접 검수하세요. 기본값으로 AI 작성 고지 문구가 붙습니다.
-- 네이버 이용약관·AI 콘텐츠 관련 정책은 변경될 수 있으니 직접 확인하세요.
-
-## 테스트
-
-```bash
-pip install -e .[dev] && pytest
+blogscope/
+  naver.py     네이버 API·RSS·글 페이지 수집     analysis.py  점수·키워드·순위·진단 로직
+  store.py     SQLite 기록·캐시                  settings.py  API 키 설정
+  web.py       로컬 웹 서버/JSON API             static/      화면(index.html)
 ```
