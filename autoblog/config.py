@@ -39,6 +39,7 @@ DEFAULTS: dict = {
         "min_interval_minutes": 180,
         "jitter_minutes": 40,
         "poll_seconds": 60,
+        "max_retries": 2,
     },
     "paths": {"db": "data/autoblog.db", "output": "output", "images": "images"},
 }

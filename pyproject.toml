@@ -17,3 +17,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["autoblog"]
+
+[tool.setuptools.package-data]
+autoblog = ["static/*"]

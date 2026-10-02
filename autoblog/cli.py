@@ -98,6 +98,12 @@ def cmd_run(args, cfg, db: DB):
     Scheduler(cfg, db, make_generator(cfg), make_publisher(cfg)).run_forever()
 
 
+def cmd_web(args, cfg, db: DB):
+    from .web import serve
+
+    serve(cfg, db, args.port, with_scheduler=not args.no_scheduler)
+
+
 def cmd_check(args, cfg, db: DB):
     pub = NaverPublisher(cfg)
     try:
@@ -142,6 +148,10 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--id", type=int); a.set_defaults(fn=cmd_post)
 
     sub.add_parser("run", help="스케줄러 상시 실행").set_defaults(fn=cmd_run)
+    a = sub.add_parser("web", help="웹 UI(대시보드·편집·예약) 실행")
+    a.add_argument("--port", type=int, default=8765)
+    a.add_argument("--no-scheduler", action="store_true", help="예약 발행 백그라운드 처리 끄기")
+    a.set_defaults(fn=cmd_web)
     sub.add_parser("check", help="네이버 API 연결 확인").set_defaults(fn=cmd_check)
     return p
 

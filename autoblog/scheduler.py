@@ -7,6 +7,7 @@ import time
 from datetime import datetime, timedelta
 
 from .db import DB
+from . import workflow
 from .pipeline import process_topic
 
 log = logging.getLogger("autoblog")
@@ -43,6 +44,9 @@ class Scheduler:
     def tick(self, now: datetime | None = None) -> bool:
         """한 번 점검하고 발행 조건이면 다음 주제 1건을 처리. 발행했으면 True."""
         now = now or datetime.now()
+        # 사용자가 시각을 지정해 예약한 글은 활동시간/한도 규칙과 무관하게 그 시각에 발행
+        if workflow.publish_due(self.db, self.cfg, lambda: self.publisher, now):
+            return True
         ok, why = self.can_post_now(now)
         if not ok:
             log.debug("대기: %s", why)

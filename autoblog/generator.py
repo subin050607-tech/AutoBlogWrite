@@ -49,6 +49,10 @@ def build_user_prompt(topic: dict, cfg: dict, feedback: list[str] | None = None)
         lines.append("사용 가능한 이미지 파일: " + ", ".join(meta["images"]))
     for rule in p.get("extra_rules", []):
         lines.append(f"추가 규칙: {rule}")
+    if meta.get("title_hint"):
+        lines.append(f"제목(그대로 사용): {meta['title_hint']}")
+    if meta.get("outline"):
+        lines.append("반드시 따를 목차(## 소제목 순서):\n" + "\n".join(f"- {h}" for h in meta["outline"]))
     if feedback:
         lines.append("\n[이전 초안의 문제 — 반드시 고쳐서 다시 작성]\n- " + "\n- ".join(feedback))
     lines.append("\n위 조건으로 글을 작성하세요.")
@@ -95,6 +99,17 @@ class AnthropicGenerator:
     def generate(self, topic: dict, feedback: list[str] | None = None) -> Article:
         return parse_article(self._complete(SYSTEM_PROMPT, build_user_prompt(topic, self.cfg, feedback)))
 
+    def suggest_titles(self, keyword: str, n: int = 5) -> list[str]:
+        return _json_list(self._complete(
+            "네이버 블로그 제목 카피라이터. JSON 배열(문자열 리스트)만 출력한다.",
+            f"핵심 키워드 '{keyword}'를 포함하고 과장·낚시 없이 클릭하고 싶은 블로그 제목 {n}개. "
+            f"블로그 성격: {self.cfg['persona']['blog_theme']}"))
+
+    def suggest_outline(self, keyword: str, title: str = "") -> list[str]:
+        return _json_list(self._complete(
+            "블로그 기획자. '## 소제목' 텍스트만 담은 JSON 배열(문자열 리스트)을 출력한다. 도입/마무리 제외 소제목 4~6개.",
+            f"키워드: {keyword}\n제목: {title or '(미정)'}\n독자: {self.cfg['persona']['audience']}"))
+
     def suggest_topics(self, theme: str, n: int) -> list[str]:
         out = self._complete(
             "블로그 키워드 기획자. JSON 배열(문자열 리스트)만 출력한다.",
@@ -102,6 +117,11 @@ class AnthropicGenerator:
         )
         m = re.search(r"\[.*\]", out, re.S)
         return [str(x).strip() for x in json.loads(m.group(0))] if m else []
+
+
+def _json_list(out: str) -> list[str]:
+    m = re.search(r"\[.*\]", out, re.S)
+    return [str(x).strip() for x in json.loads(m.group(0)) if str(x).strip()] if m else []
 
 
 class MockGenerator:
@@ -112,15 +132,24 @@ class MockGenerator:
 
     def generate(self, topic: dict, feedback: list[str] | None = None) -> Article:
         kw = topic["keyword"]
+        meta = topic.get("meta", {})
+        heads = meta.get("outline") or [f"{kw}란 무엇인가요?", "준비할 것", "이렇게 해보세요", "마무리"]
         para = ("처음 찾아보시는 분들이 가장 궁금해하시는 내용을 차근차근 정리했어요. "
                 "직접 확인하면서 느낀 점과 주의할 점을 함께 적었으니 천천히 읽어보세요. ") * 6
         imgs = topic.get("meta", {}).get("images") or []
         img_md = f"\n\n![{kw} 사진]({imgs[0]})\n" if imgs else ""
-        body = (f"{kw}에 대해 알아볼게요. {para}\n\n## {kw}란 무엇인가요?\n\n{para}{img_md}\n\n## 준비할 것\n\n- 기본 정보 확인\n- 비용 비교\n"
-                f"- 후기 살펴보기\n\n{para}\n\n## 이렇게 해보세요\n\n1. 목표 정하기\n2. 비교하기\n3. 실행하기\n\n{para}\n\n"
-                f"## 마무리\n\n{para}")
-        return Article(title=f"{kw} 완벽 정리, 처음이라면 꼭 읽어보세요", body_md=body,
+        sections = "".join(f"\n\n## {h}\n\n{para}{img_md if i == 0 else ''}" for i, h in enumerate(heads))
+        body = f"{kw}에 대해 알아볼게요. {para}{sections}"
+        return Article(title=meta.get("title_hint") or f"{kw} 완벽 정리, 처음이라면 꼭 읽어보세요", body_md=body,
                        tags=[kw, "정리", "가이드", "후기", "팁"], summary=f"{kw} 핵심 요약")
+
+    def suggest_titles(self, keyword: str, n: int = 5) -> list[str]:
+        forms = ["{} 완벽 정리, 처음이라면 꼭 읽어보세요", "{} 이것만 알면 끝", "{} 비교·후기 한눈에 보기",
+                 "{} 시작 전 체크리스트", "{} 자주 묻는 질문 총정리"]
+        return [forms[i % len(forms)].format(keyword) for i in range(n)]
+
+    def suggest_outline(self, keyword: str, title: str = "") -> list[str]:
+        return [f"{keyword}란 무엇인가요?", "준비할 것", "이렇게 해보세요", "주의할 점", "마무리"]
 
     def suggest_topics(self, theme: str, n: int) -> list[str]:
         return [f"{theme} 추천 {i + 1}" for i in range(n)]
