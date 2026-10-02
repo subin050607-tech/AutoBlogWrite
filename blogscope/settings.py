@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 FIELDS = {
+    "naver_api_source": "NAVER_API_SOURCE",    # hub(NAVER API HUB, 기본) | developers(기존 개발자센터 키)
     "naver_client_id": "NAVER_CLIENT_ID",
     "naver_client_secret": "NAVER_CLIENT_SECRET",
     "searchad_api_key": "SEARCHAD_API_KEY",
@@ -43,6 +44,7 @@ class Settings:
         for k in FIELDS:
             v = self.get(k)
             out[k] = (v[:4] + "•" * 6 if v and k in SECRET else v)
+        out["naver_api_source"] = "developers" if self.get("naver_api_source") == "developers" else "hub"
         out["has_search"] = bool(self.get("naver_client_id") and self.get("naver_client_secret"))
         out["has_searchad"] = all(self.get(k) for k in ("searchad_api_key", "searchad_secret", "searchad_customer_id"))
         return out

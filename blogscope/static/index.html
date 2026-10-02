@@ -166,16 +166,22 @@ async function pHist(){const [b,k]=await Promise.all([api('GET','/api/history?ki
 /* ---------------- 설정 ---------------- */
 function pSet(){const f=(id,l,ph)=>`<label class="small"><b>${l}</b></label><input id="${id}" placeholder="${esc(ph)}" value="${esc(String(S[id]||'').includes('•')?'':S[id]||'')}" autocomplete="off"><p></p>`;
  $('#main').innerHTML=`<div class="card"><h2>① 네이버 검색 API ${S.has_search?'<span class="ok">● 연결됨</span>':'<span class="mute">○ 미설정</span>'}</h2>
- <p class="small mute">블로그 검색 노출·순위 확인·발행량·검색 추이에 사용합니다. <b>무료</b> (검색 하루 25,000회, 데이터랩 하루 1,000회)</p>
- <ol class="steps small"><li><a href="https://developers.naver.com/apps/#/register" target="_blank" rel="noopener">네이버 개발자센터 → 애플리케이션 등록</a></li>
- <li>사용 API에서 <b>검색</b>과 <b>데이터랩(검색어트렌드)</b>를 추가</li><li>환경 추가 → <b>WEB 설정</b>, 서비스 URL에 <code>http://127.0.0.1</code></li><li>발급된 Client ID / Client Secret 을 아래에 입력</li></ol>
+ <p class="small mute">블로그 검색 노출·순위 확인·발행량·검색 추이에 사용합니다.</p>
+ <div class="row small" style="margin:6px 0 10px"><b>키 발급처</b>
+ <label><input type="radio" name="src" value="hub" style="width:auto" ${S.naver_api_source!=='developers'?'checked':''}> NAVER API HUB (신규 발급은 여기서만 가능)</label>
+ <label><input type="radio" name="src" value="developers" style="width:auto" ${S.naver_api_source==='developers'?'checked':''}> 네이버 개발자센터 (2026-07-30 이전에 받은 키)</label></div>
+ <div class="note small">네이버가 2026년 7월 31일부터 검색 API 신규 신청을 <b>네이버 클라우드 NAVER API HUB</b>로 옮겼습니다. 현재 한시적으로 무료이며, 가입 시 결제수단 등록이 필요합니다(향후 유료화 가능성 공지됨).</div>
+ <ol class="steps small"><li><a href="https://console.ncloud.com" target="_blank" rel="noopener">네이버 클라우드 콘솔</a> 가입·로그인 (결제수단 등록)</li>
+ <li>Services → Application Service → <b>NAVER API HUB</b> 이용 신청</li>
+ <li>Application 등록 → 사용할 API에 <b>검색(블로그)</b>과 <b>검색어 트렌드</b> 추가</li>
+ <li>발급된 <b>Client ID / Client Secret</b>을 아래에 입력</li></ol>
  ${f('naver_client_id','Client ID','')}${f('naver_client_secret','Client Secret',S.naver_client_secret?'저장됨 — 바꿀 때만 입력':'')}</div>
  <div class="card"><h2>② 네이버 검색광고 API ${S.has_searchad?'<span class="ok">● 연결됨</span>':'<span class="mute">○ 미설정</span>'}</h2>
  <p class="small mute">월간 검색량(PC/모바일)과 연관 키워드에 사용합니다. <b>무료</b> — 광고비를 쓰지 않아도 발급됩니다.</p>
  <ol class="steps small"><li><a href="https://searchad.naver.com" target="_blank" rel="noopener">네이버 검색광고</a> 가입 후 광고시스템 접속</li><li>상단 <b>도구 → API 사용 관리</b> → 네이버 검색광고 API 서비스 신청</li><li>엑세스라이선스, 비밀키, CUSTOMER_ID 를 아래에 입력</li></ol>
  ${f('searchad_api_key','엑세스라이선스 (API KEY)',S.searchad_api_key?'저장됨 — 바꿀 때만 입력':'')}${f('searchad_secret','비밀키 (SECRET KEY)',S.searchad_secret?'저장됨 — 바꿀 때만 입력':'')}${f('searchad_customer_id','CUSTOMER_ID','')}</div>
  <div class="card"><button class="btn" id="save">저장</button> <span class="mute small">키는 이 컴퓨터의 data/settings.json 에만 저장되며 외부로 보내지 않습니다(네이버 API 호출 제외).</span></div>`;
- $('#save').onclick=()=>run($('#save'),async()=>{const v={};['naver_client_id','naver_client_secret','searchad_api_key','searchad_secret','searchad_customer_id'].forEach(k=>{const x=$('#'+k).value.trim();if(x)v[k]=x});
+ $('#save').onclick=()=>run($('#save'),async()=>{const v={naver_api_source:document.querySelector('input[name=src]:checked').value};['naver_client_id','naver_client_secret','searchad_api_key','searchad_secret','searchad_customer_id'].forEach(k=>{const x=$('#'+k).value.trim();if(x)v[k]=x});
   S=await api('POST','/api/settings',v);toast('저장했습니다');pSet()})}
 
 (async()=>{try{S=await api('GET','/api/settings')}catch(e){}go('blog')})();

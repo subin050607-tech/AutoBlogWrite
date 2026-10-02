@@ -33,7 +33,8 @@ class App:
         self.settings, self.store = settings, store
         self.fetch_rss = rss_fetcher or naver.fetch_rss
         self.fetch_post = post_fetcher or naver.fetch_post
-        self._api_factory = api_factory or (lambda s: naver.OpenAPI(s.get("naver_client_id"), s.get("naver_client_secret")))
+        self._api_factory = api_factory or (lambda s: naver.OpenAPI(
+            s.get("naver_client_id"), s.get("naver_client_secret"), hub=s.get("naver_api_source") != "developers"))
         self._ad_factory = ad_factory or (lambda s: naver.SearchAd(
             s.get("searchad_api_key"), s.get("searchad_secret"), s.get("searchad_customer_id")))
 

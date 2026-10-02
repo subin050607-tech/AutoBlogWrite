@@ -27,8 +27,10 @@ python -m blogscope
 
 ## 무료 API 키 (설정 탭에서 입력)
 
-1. **네이버 검색 API** — [developers.naver.com](https://developers.naver.com/apps/#/register) 에서 애플리케이션 등록
-   → 사용 API: **검색**, **데이터랩(검색어트렌드)** → WEB 환경 `http://127.0.0.1` → Client ID/Secret. 무료(검색 25,000회/일).
+1. **네이버 검색 API (NAVER API HUB)** — 2026-07-31부터 신규 신청은 네이버 클라우드에서만 가능합니다(현재 한시 무료, 결제수단 등록 필요).
+   [console.ncloud.com](https://console.ncloud.com) → Services → Application Service → **NAVER API HUB** 이용 신청
+   → Application 등록, **검색(블로그)**·**검색어 트렌드** 추가 → Client ID/Secret. 설정에서 키 발급처를 'NAVER API HUB'로 둡니다.
+   2026-07-30 이전에 developers.naver.com 에서 받은 키는 2027-06-30까지 '개발자센터'를 골라 쓸 수 있습니다.
 2. **네이버 검색광고 API** — [searchad.naver.com](https://searchad.naver.com) 가입 → 도구 → API 사용 관리. 광고비 없이 무료 발급.
 
 키는 `data/settings.json` 에만 저장됩니다. 키가 없어도 블로그 분석·포스팅 진단은 동작합니다.

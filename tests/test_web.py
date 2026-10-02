@@ -134,3 +134,40 @@ def test_http_security(server):
     s, _ = call(base, "GET", "/api/settings")
     with urllib.request.urlopen(base + "/api/settings") as r:
         assert "script-src 'none'" in r.headers["Content-Security-Policy"]
+
+
+def test_openapi_hub_and_legacy_requests(monkeypatch):
+    seen = []
+
+    def fake_request(url, headers=None, data=None, method=None, timeout=15):
+        seen.append((url, headers, data))
+        if "trend" in url or "datalab" in url:
+            return json.dumps({"results": [{"data": [{"period": "2026-01-01", "ratio": 50}]}]}).encode()
+        return json.dumps({"total": 3, "items": [{"title": "<b>캠핑</b>", "link": "https://blog.naver.com/a/1",
+                                                  "bloggername": "a", "bloggerlink": "", "postdate": "20260101"}]}).encode()
+
+    monkeypatch.setattr(naver, "request", fake_request)
+    hub = naver.OpenAPI("id", "sec")
+    r = hub.search_blog("캠핑", display=10)
+    assert r["items"][0]["title"] == "캠핑" and r["total"] == 3
+    url, h, _ = seen[-1]
+    assert url.startswith("https://naverapihub.apigw.ntruss.com/search/v1/blog?") and "query=%EC%BA%A0%ED%95%91" in url
+    assert h == {"X-NCP-APIGW-API-KEY-ID": "id", "X-NCP-APIGW-API-KEY": "sec"}
+    hub.trend("캠핑")
+    assert seen[-1][0] == "https://naverapihub.apigw.ntruss.com/search-trend/v1/search"
+    assert json.loads(seen[-1][2])["keywordGroups"][0]["keywords"] == ["캠핑"]
+
+    old = naver.OpenAPI("id", "sec", hub=False)
+    old.search_blog("x")
+    assert seen[-1][0].startswith("https://openapi.naver.com/v1/search/blog.json?")
+    assert seen[-1][1] == {"X-Naver-Client-Id": "id", "X-Naver-Client-Secret": "sec"}
+    old.trend("x")
+    assert seen[-1][0] == "https://openapi.naver.com/v1/datalab/search"
+
+
+def test_settings_api_source(tmp_path, monkeypatch):
+    monkeypatch.delenv("NAVER_API_SOURCE", raising=False)
+    s = Settings(tmp_path / "s.json")
+    assert s.public()["naver_api_source"] == "hub"
+    s.update({"naver_api_source": "developers"})
+    assert s.public()["naver_api_source"] == "developers"

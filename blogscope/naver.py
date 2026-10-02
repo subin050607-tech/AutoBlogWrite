@@ -33,8 +33,8 @@ class NaverError(Exception):
 
 def _explain(code: int, body: str) -> str:
     hint = {
-        401: "API 인증 실패 — 설정의 키 값을 확인하세요.",
-        403: "API 권한 없음 — 네이버 개발자센터 애플리케이션에 해당 API(검색/데이터랩)를 추가했는지 확인하세요.",
+        401: "API 인증 실패 — 설정의 키 값과 '키 발급처'(API HUB / 개발자센터)가 맞는지 확인하세요.",
+        403: "API 권한 없음 — 애플리케이션에 해당 API(검색/검색어트렌드)를 추가했는지 확인하세요.",
         404: "찾을 수 없습니다 — 아이디/주소가 맞는지, 공개 블로그인지 확인하세요.",
         429: "호출 한도 초과 — 잠시 후 다시 시도하세요.",
     }.get(code, "요청 실패")
@@ -183,19 +183,27 @@ def fetch_post(blog_id: str, log_no: str) -> dict:
     return parse_post_html(page.decode("utf-8", "replace"))
 
 
-# ---------------------------------------------------------------- 검색 / 데이터랩 API (무료, 하루 25,000 / 1,000회)
+# ---------------------------------------------------------------- 검색 / 검색어트렌드 API
+# 2026-07-31 부터 신규 신청은 네이버 클라우드 'NAVER API HUB' 로만 가능(현재 한시 무료).
+# 그 전에 developers.naver.com 에서 받은 키는 2027-06-30 까지 기존 주소로 쓸 수 있다.
 class OpenAPI:
-    BASE = "https://openapi.naver.com"
+    HUB = "https://naverapihub.apigw.ntruss.com"
+    LEGACY = "https://openapi.naver.com"
 
-    def __init__(self, client_id: str, client_secret: str, base: str | None = None):
-        self.cid, self.secret, self.base = client_id, client_secret, (base or self.BASE).rstrip("/")
+    def __init__(self, client_id: str, client_secret: str, base: str | None = None, hub: bool = True):
+        self.cid, self.secret, self.hub = client_id, client_secret, hub
+        self.base = (base or (self.HUB if hub else self.LEGACY)).rstrip("/")
+        self.blog_path = "/search/v1/blog" if hub else "/v1/search/blog.json"
+        self.trend_path = "/search-trend/v1/search" if hub else "/v1/datalab/search"
 
     def _h(self) -> dict:
+        if self.hub:
+            return {"X-NCP-APIGW-API-KEY-ID": self.cid, "X-NCP-APIGW-API-KEY": self.secret}
         return {"X-Naver-Client-Id": self.cid, "X-Naver-Client-Secret": self.secret}
 
     def search_blog(self, query: str, display: int = 100, start: int = 1, sort: str = "sim") -> dict:
         qs = urllib.parse.urlencode({"query": query, "display": display, "start": start, "sort": sort})
-        d = json.loads(request(f"{self.base}/v1/search/blog.json?{qs}", self._h()))
+        d = json.loads(request(f"{self.base}{self.blog_path}?{qs}", self._h()))
         items = [{
             "title": clean(x.get("title")),
             "link": x.get("link", ""),
@@ -211,7 +219,7 @@ class OpenAPI:
         start = end - timedelta(days=months * 31)
         body = {"startDate": start.isoformat(), "endDate": end.isoformat(), "timeUnit": "month",
                 "keywordGroups": [{"groupName": keyword, "keywords": [keyword]}]}
-        d = json.loads(request(f"{self.base}/v1/datalab/search", {**self._h(), "Content-Type": "application/json"},
+        d = json.loads(request(f"{self.base}{self.trend_path}", {**self._h(), "Content-Type": "application/json"},
                                json.dumps(body).encode("utf-8"), "POST"))
         res = d.get("results") or [{}]
         return [{"period": x["period"], "ratio": x["ratio"]} for x in res[0].get("data", [])]
