@@ -1,4 +1,5 @@
 import base64
+from pathlib import Path
 import json
 import threading
 import urllib.error
@@ -152,3 +153,41 @@ def test_image_upload_rules(server):
     assert sorted(json.loads(call(base, "POST", f"/api/topics/{tid}/images", {})[1])["images"]) == ["a.png", "evil.png"]
     assert call(base, "GET", f"/img/{tid}/a.png")[0] == 200
     assert call(base, "GET", f"/img/{tid}/..%2F..%2Fconfig.yaml")[0] == 404
+
+
+def test_style_rendering_and_prompt(tmp_path):
+    from autoblog.generator import build_user_prompt
+    from autoblog.render import render_html, render_theme
+
+    c = cfg_style(tmp_path)
+    h = render_html("## 🧭 소제목\n\n“한 줄 대사입니다.”\n\n일반 문단입니다.", theme=render_theme(c))
+    assert "font-size:21px" in h and "border-left:5px" not in h          # plain 소제목
+    assert h.count("font-weight:bold;color:#333") == 1                   # 대사만 강조
+    assert h.index("응원") > h.index("일반 문단")                         # 푸터는 본문 뒤
+    assert 'text-align:center' in h
+
+    ex = tmp_path / "ex.md"; ex.write_text("예시문장XYZ", encoding="utf-8")
+    c["persona"].update(example_file=str(ex), style_guide=["짧게 끊기"], title_format="{keyword} 특징 총정리")
+    pr = build_user_prompt({"keyword": "ISTJ", "meta": {}}, c)
+    assert "스타일 규칙: 짧게 끊기" in pr and "예시문장XYZ" in pr and "제목 형식" in pr
+    assert MockGenerator(c).suggest_titles("ISTJ", 3)[0] == "ISTJ 특징 총정리"
+    c["persona"]["example_file"] = str(tmp_path / "missing.md")
+    assert "<example>" not in build_user_prompt({"keyword": "k", "meta": {}}, c)  # 파일 없어도 동작
+
+
+def cfg_style(tmp):
+    c, _, _, _ = mk(tmp)
+    c["blog"].update(heading_style="plain", footer_lines=["💜 \"응원합니다\""])
+    return c
+
+
+def test_example_config_is_valid_and_passes_own_example(tmp_path):
+    import yaml
+    from autoblog.generator import Article
+    from autoblog.quality import check_article
+
+    user = yaml.safe_load(open("config.example.yaml", encoding="utf-8"))
+    c = _merge(DEFAULTS, user)
+    assert c["persona"]["title_format"] and len(c["persona"]["style_guide"]) >= 8
+    assert c["blog"]["heading_style"] == "plain" and len(c["blog"]["footer_lines"]) == 2
+    assert Path(c["persona"]["example_file"]).exists()

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from dataclasses import dataclass, field
 
 from .config import secret
@@ -26,11 +27,22 @@ SYSTEM_PROMPT = """당신은 네이버 블로그 전문 에디터입니다. 검�
 body_md 작성 규칙(마크다운 부분집합만 사용):
 - 제목(title)은 H1을 쓰지 말고 title 필드에만 넣는다. 본문은 '## 소제목'으로 구분하고 필요하면 '### '를 쓴다.
 - 허용 문법: 문단, ## / ###, **굵게**, - 목록, 1. 번호 목록, > 인용, --- 구분선, [링크](url), 표는 사용하지 않는다.
-- 도입부(공감·문제 제기) → 본문(소제목 3~5개) → 정리/마무리 구조.
+- 구조·소제목 개수·문단 호흡은 사용자의 '스타일 규칙'이 있으면 그것을 최우선으로 따른다. 없으면 도입부(공감·문제 제기) → 소제목 3~5개 → 정리/마무리.
+- 이모지는 스타일 규칙이 허용할 때만, 규칙이 정한 위치에만 쓴다. 빈 줄로 문단을 구분한다.
 - 이미지를 넣고 싶은 위치에는 사용자가 제공한 이미지 목록 중에서만 ![설명](파일명) 형태로 넣는다. 목록에 없으면 이미지 문법을 쓰지 않는다.
 - 핵심 키워드는 제목, 도입부, 소제목 일부에 자연스럽게 포함하되 억지 반복 금지.
 - 확인할 수 없는 통계·인용·URL을 지어내지 않는다.
-tags는 5~10개, '#' 없이 단어만."""
+tags는 5~10개(스타일 규칙이 개수를 정하면 그에 따름), '#' 없이 단어만."""
+
+
+def load_example(persona: dict) -> str:
+    path = persona.get("example_file")
+    if not path:
+        return ""
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
 
 
 def build_user_prompt(topic: dict, cfg: dict, feedback: list[str] | None = None) -> str:
@@ -49,6 +61,14 @@ def build_user_prompt(topic: dict, cfg: dict, feedback: list[str] | None = None)
         lines.append("사용 가능한 이미지 파일: " + ", ".join(meta["images"]))
     for rule in p.get("extra_rules", []):
         lines.append(f"추가 규칙: {rule}")
+    for rule in p.get("style_guide", []):
+        lines.append(f"스타일 규칙: {rule}")
+    if p.get("title_format") and not meta.get("title_hint"):
+        lines.append(f"제목 형식(키워드만 바꿔 같은 틀로): {p['title_format']}")
+    example = load_example(p)
+    if example:
+        lines.append("\n[문체·구성 참고용 예시 글] 말투, 문장 호흡, 소제목·이모지 쓰는 방식, 글의 흐름만 따라 하세요. "
+                     "예시의 문장·소재·사례를 그대로 베끼지 마세요.\n<example>\n" + example + "\n</example>")
     if meta.get("title_hint"):
         lines.append(f"제목(그대로 사용): {meta['title_hint']}")
     if meta.get("outline"):
@@ -103,7 +123,9 @@ class AnthropicGenerator:
         return _json_list(self._complete(
             "네이버 블로그 제목 카피라이터. JSON 배열(문자열 리스트)만 출력한다.",
             f"핵심 키워드 '{keyword}'를 포함하고 과장·낚시 없이 클릭하고 싶은 블로그 제목 {n}개. "
-            f"블로그 성격: {self.cfg['persona']['blog_theme']}"))
+            f"블로그 성격: {self.cfg['persona']['blog_theme']}"
+            + (f"\n제목 형식(이 틀을 따르되 표현을 조금씩 달리): {self.cfg['persona']['title_format']}"
+               if self.cfg["persona"].get("title_format") else "")))
 
     def suggest_outline(self, keyword: str, title: str = "") -> list[str]:
         return _json_list(self._complete(
@@ -144,6 +166,13 @@ class MockGenerator:
                        tags=[kw, "정리", "가이드", "후기", "팁"], summary=f"{kw} 핵심 요약")
 
     def suggest_titles(self, keyword: str, n: int = 5) -> list[str]:
+        fmt = self.cfg["persona"].get("title_format")
+        if fmt:
+            return [fmt.replace("{keyword}", keyword)] + self.suggest_titles_plain(keyword, n - 1)
+        return self.suggest_titles_plain(keyword, n)
+
+    @staticmethod
+    def suggest_titles_plain(keyword: str, n: int) -> list[str]:
         forms = ["{} 완벽 정리, 처음이라면 꼭 읽어보세요", "{} 이것만 알면 끝", "{} 비교·후기 한눈에 보기",
                  "{} 시작 전 체크리스트", "{} 자주 묻는 질문 총정리"]
         return [forms[i % len(forms)].format(keyword) for i in range(n)]

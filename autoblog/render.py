@@ -13,12 +13,15 @@ FONT = "font-family:'Nanum Gothic',sans-serif;"
 STYLES = {
     "p": f"{FONT}font-size:16px;line-height:1.9;margin:0 0 18px;",
     "h2": f"{FONT}font-size:22px;font-weight:bold;margin:36px 0 14px;padding-left:10px;border-left:5px solid #03c75a;",
+    "h2_plain": f"{FONT}font-size:21px;font-weight:bold;margin:42px 0 16px;",  # 이모지가 장식을 대신하는 스타일
     "h3": f"{FONT}font-size:18px;font-weight:bold;margin:26px 0 10px;",
     "ul": f"{FONT}font-size:16px;line-height:1.9;margin:0 0 18px;padding-left:24px;",
     "quote": f"{FONT}font-size:16px;line-height:1.8;margin:0 0 18px;padding:12px 16px;background:#f5f7f6;border-left:4px solid #ccc;",
     "hr": "border:0;border-top:1px solid #ddd;margin:28px 0;",
     "img": "max-width:100%;display:block;margin:18px auto;",
     "caption": f"{FONT}font-size:13px;color:#888;text-align:center;margin:-8px 0 18px;",
+    "say": f"{FONT}font-size:17px;line-height:1.8;font-weight:bold;color:#333;margin:0 0 18px;",  # 대사 한 줄 강조
+    "footer": f"{FONT}font-size:16px;line-height:1.9;text-align:center;margin:6px 0;",
     "disclosure": f"{FONT}font-size:13px;color:#888;margin-top:32px;",
     "tags": f"{FONT}font-size:14px;color:#03c75a;margin-top:18px;",
 }
@@ -38,19 +41,32 @@ def _inline(text: str) -> str:
     return s
 
 
+_SAY = re.compile(r"^[“\"].{1,80}[”\"]$")
+
+
+def render_theme(cfg: dict) -> dict:
+    """설정(blog.*)에서 서식 옵션만 뽑는다."""
+    b = cfg["blog"]
+    return {"heading_style": b.get("heading_style", "bar"), "footer_lines": b.get("footer_lines") or []}
+
+
 def render_html(
     body_md: str,
     resolve_image: Callable[[str], str | None] | None = None,
     tags: list[str] | None = None,
     disclosure: str = "",
+    theme: dict | None = None,
 ) -> str:
+    theme = theme or {}
+    h2_style = STYLES["h2_plain" if theme.get("heading_style") == "plain" else "h2"]
     out: list[str] = []
     para: list[str] = []
     lines = body_md.replace("\r\n", "\n").split("\n")
 
     def flush_para() -> None:
         if para:
-            out.append(f'<p style="{STYLES["p"]}">' + "<br>".join(_inline(x) for x in para) + "</p>")
+            style = STYLES["say"] if len(para) == 1 and _SAY.match(para[0]) else STYLES["p"]
+            out.append(f'<p style="{style}">' + "<br>".join(_inline(x) for x in para) + "</p>")
             para.clear()
 
     i = 0
@@ -62,7 +78,7 @@ def render_html(
         elif stripped.startswith("### "):
             flush_para(); out.append(f'<h3 style="{STYLES["h3"]}">{_inline(stripped[4:])}</h3>')
         elif stripped.startswith("## ") or stripped.startswith("# "):
-            flush_para(); out.append(f'<h2 style="{STYLES["h2"]}">{_inline(stripped.lstrip("# "))}</h2>')
+            flush_para(); out.append(f'<h2 style="{h2_style}">{_inline(stripped.lstrip("# "))}</h2>')
         elif re.fullmatch(r"-{3,}", stripped):
             flush_para(); out.append(f'<hr style="{STYLES["hr"]}">')
         elif _IMG.match(stripped):
@@ -97,6 +113,8 @@ def render_html(
         i += 1
     flush_para()
 
+    for line in theme.get("footer_lines") or []:
+        out.append(f'<p style="{STYLES["footer"]}">{_inline(line)}</p>')
     if disclosure:
         out.append(f'<p style="{STYLES["disclosure"]}">{html.escape(disclosure)}</p>')
     if tags:

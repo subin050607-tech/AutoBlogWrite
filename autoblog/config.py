@@ -15,6 +15,8 @@ DEFAULTS: dict = {
         "default_category": "",
         "publish": True,
         "ai_disclosure": True,
+        "heading_style": "bar",     # bar(좌측 초록 막대) | plain(이모지 소제목용, 장식 없음)
+        "footer_lines": [],         # 글 끝에 가운데 정렬로 붙는 고정 문구
         "ai_disclosure_text": "※ 이 글은 AI의 도움을 받아 작성되었으며, 게시 전 직접 검토했습니다.",
     },
     "persona": {
@@ -24,6 +26,9 @@ DEFAULTS: dict = {
         "min_chars": 1500,
         "max_chars": 5000,
         "extra_rules": [],
+        "style_guide": [],          # 글 구성/말투 규칙(프롬프트에 그대로 전달)
+        "title_format": "",         # 예: "{keyword} 특징 총정리｜..." (비우면 자유 형식)
+        "example_file": "",         # 문체 참고용 예시 글 경로
     },
     "quality": {
         "require_keyword_in_title": True,

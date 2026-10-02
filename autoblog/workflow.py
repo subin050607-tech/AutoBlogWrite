@@ -11,7 +11,7 @@ from .db import DB
 from .generator import Article
 from .pipeline import make_image_resolver
 from .quality import check_article
-from .render import render_html
+from .render import render_html, render_theme
 
 log = logging.getLogger("autoblog")
 
@@ -135,7 +135,7 @@ def publish(db: DB, cfg: dict, publisher, article_id: int) -> str:
     t = _topic_for(db, a)
     try:
         b = cfg["blog"]
-        body = render_html(a["body_md"], resolve_image=make_image_resolver(t, cfg, publisher), tags=a["tags"],
+        body = render_html(a["body_md"], resolve_image=make_image_resolver(t, cfg, publisher), tags=a["tags"], theme=render_theme(cfg),
                            disclosure=b["ai_disclosure_text"] if b["ai_disclosure"] else "")
         res = publisher.publish(a["title"], body, a["tags"], t["meta"].get("category", ""))
     except Exception as e:

@@ -8,7 +8,7 @@ from .db import DB
 from .generator import Article
 from .publishers import PublishResult
 from .quality import check_article
-from .render import render_html
+from .render import render_html, render_theme
 
 log = logging.getLogger("autoblog")
 
@@ -60,6 +60,7 @@ def process_topic(topic: dict, cfg: dict, db: DB, generator, publisher, record: 
             article.body_md,
             resolve_image=make_image_resolver(topic, cfg, publisher),
             tags=article.tags,
+            theme=render_theme(cfg),
             disclosure=b["ai_disclosure_text"] if b["ai_disclosure"] else "",
         )
         res = publisher.publish(

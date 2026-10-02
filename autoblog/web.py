@@ -22,7 +22,7 @@ from . import workflow
 from .db import DB
 from .generator import make_generator
 from .publishers import make_publisher
-from .render import render_html
+from .render import render_html, render_theme
 
 log = logging.getLogger("autoblog")
 STATIC = Path(__file__).parent / "static"
@@ -202,7 +202,7 @@ class App:
                 return src
             return f"/img/{tid}/{Path(src).name}" if (self._images_dir(tid) / Path(src).name).exists() else None
 
-        body = render_html(a["body_md"], resolve_image=resolve, tags=a["tags"], disclosure="")
+        body = render_html(a["body_md"], resolve_image=resolve, tags=a["tags"], disclosure="", theme=render_theme(self.cfg))
         from html import escape
         return f'<!doctype html><meta charset="utf-8"><title>{escape(a["title"])}</title><h1>{escape(a["title"])}</h1>{body}'
 
