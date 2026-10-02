@@ -160,3 +160,51 @@ def test_llm_errors_become_api_errors(tmp_path, monkeypatch):
     with pytest.raises(ApiError) as e:
         app.handle("POST", "/api/writer/plan", {}, {"input": {"keyword": "a"}})
     assert e.value.status == 429 and "한도" in str(e.value)
+
+
+def test_gemini_switches_to_suggested_model_on_404(tmp_path, monkeypatch):
+    paths = []
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+
+        def do_POST(self):
+            paths.append(self.path)
+            self.rfile.read(int(self.headers["Content-Length"]))
+            if "old-model" in self.path:
+                b = json.dumps({"error": {"code": 404, "message": "This model models/old-model is no longer available to new users. "
+                                          "Please update your code to use models/new-model-9 for the latest features.",
+                                          "status": "NOT_FOUND"}}).encode()
+                self.send_response(404)
+            else:
+                b = json.dumps({"candidates": [{"content": {"parts": [{"text": '{"ok": 1}'}]}}]}).encode()
+                self.send_response(200)
+            self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_port}/v1beta"
+    g = llm.Gemini("K", "old-model", base=base)
+    assert llm.parse_json(g.complete("s", "u")) == {"ok": 1}
+    assert g.model == g.switched_to == "new-model-9" and paths[-1].endswith("/models/new-model-9:generateContent")
+
+    # 안내가 없는 404 는 그대로 오류
+    class H2(H):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(404); self.end_headers(); self.wfile.write(b'{"error":"nope"}')
+    srv2 = ThreadingHTTPServer(("127.0.0.1", 0), H2)
+    threading.Thread(target=srv2.serve_forever, daemon=True).start()
+    with pytest.raises(llm.LLMError) as e:
+        llm.Gemini("K", "x", base=f"http://127.0.0.1:{srv2.server_port}/v1beta").complete("s", "u")
+    assert e.value.status == 404
+
+    # 웹 앱: 전환된 모델이 설정에 저장된다
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    app, _ = make_app(tmp_path)
+    app._llm_factory = lambda st: llm.Gemini("K", st.get("llm_model") or "old-model", base=base)
+    monkeypatch.setattr(writer, "plan", lambda c, i, r: (c.complete("s", "u"), {"titles": ["t"], "outline": [], "hashtags": []})[1])
+    app.handle("POST", "/api/writer/plan", {}, {"input": {"keyword": "k"}, "use_refs": False})
+    assert app.settings.get("llm_model") == "new-model-9"
+    srv.shutdown(); srv2.shutdown()

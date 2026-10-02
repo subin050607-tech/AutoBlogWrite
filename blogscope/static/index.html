@@ -290,7 +290,7 @@ function pSet(){const f=(id,l,ph)=>`<label class="small"><b>${l}</b></label><inp
  <label><input type="radio" name="llmp" value="openai_compat" style="width:auto" ${S.llm_provider==='openai_compat'?'checked':''}> OpenAI 호환 (Groq·OpenRouter·Ollama 등)</label></div>
  <ol class="steps small"><li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>에 구글 계정으로 로그인 (카드 등록 불필요)</li><li><b>Create API key</b> → 만들어진 키를 아래에 붙여넣기</li></ol>
  <p class="small mute">무료 등급은 분당·일일 사용 한도가 있고, 입력 내용이 구글의 서비스 개선에 쓰일 수 있습니다. 개인정보·민감한 내용은 넣지 마세요.</p>
- ${f('gemini_api_key','Gemini API 키',S.gemini_api_key?'저장됨 — 바꿀 때만 입력':'AIza…')}${f('llm_model','모델 이름 (비우면 gemini-2.5-flash)','gemini-2.5-flash')}
+ ${f('gemini_api_key','Gemini API 키',S.gemini_api_key?'저장됨 — 바꿀 때만 입력':'AIza…')}${f('llm_model','모델 이름 (비우면 gemini-3.8-flash)','gemini-3.8-flash')}
  <details class="small"><summary>OpenAI 호환 설정</summary><p></p>${f('llm_base_url','주소 (base URL)','https://api.groq.com/openai/v1')}${f('llm_api_key','API 키',S.llm_api_key?'저장됨 — 바꿀 때만 입력':'')}</details></div>
  <div class="card"><h2>① 네이버 검색 API ${S.has_search?'<span class="ok">● 연결됨</span>':'<span class="mute">○ 미설정</span>'}</h2>
  <p class="small mute">블로그 검색 노출·순위 확인·발행량·검색 추이에 사용합니다.</p>

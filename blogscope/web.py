@@ -51,6 +51,12 @@ class App:
             raise ApiError("글쓰기는 AI 키가 필요합니다. '설정' 탭에서 무료 Gemini API 키를 입력하세요.", 412)
         return self._llm_factory(self.settings)
 
+    def _remember_model(self, client) -> None:
+        """구글 안내로 모델이 자동 전환됐으면 설정에 저장해 다음부터 바로 그 모델을 쓴다."""
+        new = getattr(client, "switched_to", None)
+        if new:
+            self.settings.update({"llm_model": new})
+
     def _refs(self, keyword: str) -> list[dict]:
         api = self.api()
         if not api:
@@ -121,6 +127,7 @@ class App:
             client = self.llm()
             refs = self._refs(inp["keyword"]) if body.get("use_refs", True) else []
             res = writer.plan(client, inp, refs)
+            self._remember_model(client)
             return {**res, "input": inp, "refs": refs, "volume": self._volume(inp["keyword"])}
         if path == "/api/writer/write" and method == "POST":
             inp = writer.normalize(body.get("input") or {})
@@ -128,6 +135,7 @@ class App:
             outline = [o for o in (body.get("outline") or []) if isinstance(o, dict) and str(o.get("heading", "")).strip()]
             refs = self._refs(inp["keyword"]) if body.get("use_refs", True) else []
             doc = writer.write(client, inp, body.get("title", ""), outline, refs)
+            self._remember_model(client)
             plan = {"titles": body.get("titles") or [], "outline": outline, "hashtags": body.get("hashtags") or []}
             return self._finish(body.get("id"), inp, plan, doc)
         if path == "/api/writer/rewrite" and method == "POST":
@@ -136,7 +144,9 @@ class App:
                 raise ApiError("원고를 찾을 수 없습니다.", 404)
             doc = writer.clean_doc(body.get("doc") or d["doc"])  # 화면에서 고친 내용 기준
             part = str(body.get("part", ""))
-            new = writer.rewrite_part(self.llm(), d["input"], doc, part, body.get("instruction", ""))
+            client = self.llm()
+            new = writer.rewrite_part(client, d["input"], doc, part, body.get("instruction", ""))
+            self._remember_model(client)
             if part in ("intro", "outro"):
                 doc[part] = new["content"]
             else:

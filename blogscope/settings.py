@@ -14,7 +14,7 @@ FIELDS = {
     "searchad_customer_id": "SEARCHAD_CUSTOMER_ID",
     "llm_provider": "LLM_PROVIDER",          # gemini(기본) | openai_compat
     "gemini_api_key": "GEMINI_API_KEY",
-    "llm_model": "LLM_MODEL",                # 비우면 gemini-2.5-flash
+    "llm_model": "LLM_MODEL",                # 비우면 gemini-3.8-flash
     "llm_base_url": "LLM_BASE_URL",          # openai_compat 일 때
     "llm_api_key": "LLM_API_KEY",            # openai_compat 일 때
 }

@@ -15,7 +15,7 @@ import urllib.parse
 import urllib.request
 
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"  # 2.5-flash 는 신규 사용자에게 제공 중단(구글 API 안내)
 
 
 class LLMError(Exception):
@@ -68,6 +68,7 @@ class Gemini:
         if not api_key:
             raise LLMError("Gemini API 키가 없습니다. '설정' 탭에서 입력하세요.", 412)
         self.key, self.model, self.base = api_key, model or DEFAULT_GEMINI_MODEL, base.rstrip("/")
+        self.switched_to: str | None = None
 
     def complete(self, system: str, user: str, json_mode: bool = True, temperature: float = 0.8) -> str:
         cfg = {"temperature": temperature, "maxOutputTokens": 16384}
@@ -75,8 +76,23 @@ class Gemini:
             cfg["responseMimeType"] = "application/json"
         body = {"systemInstruction": {"parts": [{"text": system}]},
                 "contents": [{"role": "user", "parts": [{"text": user}]}], "generationConfig": cfg}
-        url = f"{self.base}/models/{urllib.parse.quote(self.model)}:generateContent"
-        d = _post(url, {"x-goog-api-key": self.key}, body)
+        try:
+            d = _post(self._url(), {"x-goog-api-key": self.key}, body)
+        except LLMError as e:
+            # 구글이 모델을 내리면 404 메시지에 대체 모델을 알려준다("Please update your code to use models/xxx").
+            m = re.search(r"use models/([A-Za-z0-9._-]+)", str(e))
+            if e.status != 404 or not m or m.group(1) == self.model:
+                raise
+            self.model = m.group(1)
+            self.switched_to = self.model
+            d = _post(self._url(), {"x-goog-api-key": self.key}, body)
+        return self._text(d)
+
+    def _url(self) -> str:
+        return f"{self.base}/models/{urllib.parse.quote(self.model)}:generateContent"
+
+    @staticmethod
+    def _text(d: dict) -> str:
         cands = d.get("candidates") or []
         if not cands:
             reason = (d.get("promptFeedback") or {}).get("blockReason", "알 수 없음")

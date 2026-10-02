@@ -32,7 +32,7 @@ AI는 사실을 확인할 수 없으므로 가격·위치 등은 '필수 포함 
 
 ### 무료 AI 키
 [Google AI Studio](https://aistudio.google.com/apikey) → Create API key (카드 불필요) → 설정 탭 '글쓰기 AI'에 입력.
-무료 등급은 분당·일일 한도가 있고 입력 내용이 구글 서비스 개선에 쓰일 수 있습니다. 모델 이름은 설정에서 바꿀 수 있습니다(기본 `gemini-2.5-flash`).
+무료 등급은 분당·일일 한도가 있고 입력 내용이 구글 서비스 개선에 쓰일 수 있습니다. 모델 이름은 설정에서 바꿀 수 있습니다(기본 `gemini-3.8-flash`).
 Groq·OpenRouter·Ollama 같은 OpenAI 호환 서비스도 선택할 수 있습니다.
 
 ## 분석 기능
