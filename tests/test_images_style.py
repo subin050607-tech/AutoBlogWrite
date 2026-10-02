@@ -133,8 +133,8 @@ def test_pollinations_client():
 
 
 def test_prompt_builder():
-    p = images.build_prompt("책상 위 노트북", "character", "16:9")
-    assert "책상 위 노트북" in p and "character" in p and "16:9" in p and "no" in p.lower()
+    p = images.build_prompt("A laptop on a desk", "character", "16:9")
+    assert p.startswith("A laptop on a desk.") and "character" in p and "No text" in p
     with pytest.raises(ValueError):
         images.build_prompt("  ", "illust", "1:1")
 
@@ -201,3 +201,42 @@ def test_web_images_and_style_settings(tmp_path, monkeypatch):
 def test_normalize_is_idempotent():
     once = writer.normalize({"keyword": "a", "signature": "x\n\ny", "style": "magazine"})
     assert writer.normalize(once) == once and once["signature"] == ["x", "y"]
+
+
+def test_to_english_prompt_uses_context_and_falls_back():
+    class L:
+        def __init__(self, out): self.out, self.user = out, ""
+        def complete(self, system, user, json_mode=True, temperature=0.8):
+            self.user = user
+            if isinstance(self.out, Exception):
+                raise self.out
+            return self.out
+    l = L('{"prompt": "A tidy wooden desk with a laptop and a planner, morning light"}')
+    assert images.to_english(l, "책상 사진", "ISTJ 특징 총정리", "ISTJ").startswith("A tidy wooden desk")
+    assert "ISTJ 특징 총정리" in l.user and "책상 사진" in l.user
+    assert images.to_english(L(llm.LLMError("busy", 503)), "책상", "t", "k") == ""
+    assert images.to_english(L("not json"), "책상", "t", "k") == ""
+
+
+def test_web_image_uses_english_prompt(tmp_path, monkeypatch):
+    for k in ("GEMINI_API_KEY", "IMAGE_PROVIDER"):
+        monkeypatch.delenv(k, raising=False)
+    s = Settings(tmp_path / "s.json"); s.update({"gemini_api_key": "g"})
+
+    class L(FakeLLM):
+        def complete(self, system, user, json_mode=True, temperature=0.8):
+            if "image generator" in system:
+                self.prompts.append(user)
+                return '{"prompt": "A calm office worker at a desk"}'
+            return super().complete(system, user, json_mode, temperature)
+
+    fl, fi = L(), FakeImg()
+    app = App(s, Store(":memory:"), llm_factory=lambda st: fl, image_factory=lambda st: fi, images_dir=tmp_path / "im")
+    r = app.handle("POST", "/api/writer/write", {}, {"input": {"keyword": "ISTJ"}, "title": "ISTJ 정리", "outline": [], "use_refs": False})
+    img = app.handle("POST", "/api/images", {}, {"doc_id": r["id"], "desc": "책상에서 일하는 사람", "style": "illust"})
+    assert img["prompt_en"] == "A calm office worker at a desk" and fi.prompts[-1][0].startswith("A calm office worker at a desk.")
+    assert "캠핑 준비물 체크리스트 총정리" in fl.prompts[-1] or "ISTJ" in fl.prompts[-1]
+    # 직접 쓴 영어 설명이 있으면 AI 변환 없이 그대로
+    n = len(fl.prompts)
+    img = app.handle("POST", "/api/images", {}, {"doc_id": r["id"], "desc": "x", "prompt_en": "A red bicycle"})
+    assert fi.prompts[-1][0].startswith("A red bicycle.") and len(fl.prompts) == n and img["prompt_en"] == "A red bicycle"

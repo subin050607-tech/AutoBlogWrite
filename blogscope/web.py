@@ -151,10 +151,22 @@ class App:
                 images.delete(self.images_dir, doc_id, q.get("name", ""))
                 return {"ok": True}
             if method == "POST":
-                prompt = images.build_prompt(body.get("desc", ""), body.get("style", "illust"), body.get("aspect", "1:1"))
-                data, mime = self._image_factory(self.settings).generate(prompt, body.get("aspect", "1:1"))
+                desc = (body.get("desc") or "").strip()
+                if not desc:
+                    raise ApiError("어떤 이미지를 만들지 설명을 입력하세요.")
+                # 이미지 모델은 영어를 훨씬 잘 이해하므로, 직접 쓴 영어가 없으면 AI로 글 맥락을 넣어 영어 설명을 만든다
+                english = (body.get("prompt_en") or "").strip()[:600]
+                if not english and self.settings.public()["has_llm"]:
+                    d = self.store.doc_get(doc_id)
+                    try:
+                        english = images.to_english(self.llm(), desc, d["doc"].get("title", ""), d["keyword"])
+                    except ApiError:
+                        english = ""
+                aspect = body.get("aspect", "1:1")
+                prompt = images.build_prompt(english or desc, body.get("style", "illust"), aspect)
+                data, mime = self._image_factory(self.settings).generate(prompt, aspect)
                 name = images.save(self.images_dir, doc_id, data, mime)
-                return {"name": name, "url": f"/img/{doc_id}/{name}"}
+                return {"name": name, "url": f"/img/{doc_id}/{name}", "prompt_en": english}
             return [{"name": n, "url": f"/img/{doc_id}/{n}"} for n in images.list_images(self.images_dir, doc_id)]
         if path == "/api/writer/plan" and method == "POST":
             inp = self._inp(body.get("input"))

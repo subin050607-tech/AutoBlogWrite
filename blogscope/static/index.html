@@ -188,12 +188,17 @@ async function imgPanel(){const io=OPT.image||{styles:{},aspects:['1:1']},marks=
  $('#d_imgbox').innerHTML=`<div class="sec"><div class="row" style="justify-content:space-between"><b>🎨 AI 이미지 만들기</b><button class="btn g s" onclick="$('#d_imgbox').innerHTML=''">닫기</button></div>
  ${marks.length?`<label class="f">원고의 사진 자리에서 고르기</label><select id="i_mark"><option value="">— 직접 입력 —</option>${marks.map((m,k)=>`<option value="${k}">${esc(m)}</option>`).join('')}</select>`:''}
  <label class="f">어떤 이미지인가요?</label><textarea id="i_desc" style="min-height:70px" placeholder="예: 노트북으로 계획표를 정리하는 차분한 직장인, 책상 위 커피">${esc(marks[0]||readDoc().title)}</textarea>
+ <details class="small" style="margin-top:6px"><summary>영어 설명 직접 고치기 (선택)</summary><p class="mute">이미지 AI는 영어를 더 잘 알아듣습니다. 비워두면 Gemini가 위 설명과 글 제목을 바탕으로 영어 설명을 만들어 씁니다.</p>
+ <textarea id="i_en" style="min-height:60px" placeholder="예: A calm office worker organizing a planner on a laptop at a wooden desk, morning sunlight, coffee cup"></textarea></details>
  <div class="two"><div><label class="f">스타일</label>${sel('i_style',io.styles,'illust')}</div><div><label class="f">비율</label>${sel('i_aspect',Object.fromEntries(io.aspects.map(a=>[a,a])),'1:1')}</div></div>
  <p class="small mute">생성 방식: <b>${S.image_provider==='pollinations'?'Pollinations (키 없음, 외부 무료 서비스)':'Gemini (내 키)'}</b> — 설정에서 바꿀 수 있어요. AI 이미지는 실제 방문·사용 사진처럼 쓰지 마세요(후기 글에서 오해를 줄 수 있음).</p>
  <button class="btn" id="i_go">이미지 만들기</button><div id="i_gal" style="margin-top:12px"></div></div>`;
- if($('#i_mark'))$('#i_mark').onchange=()=>{const v=$('#i_mark').value;if(v!=='')$('#i_desc').value=marks[+v]};
+ if($('#i_mark'))$('#i_mark').onchange=()=>{const v=$('#i_mark').value;if(v!=='')$('#i_desc').value=marks[+v];$('#i_en').value=''};
+ $('#i_desc').oninput=()=>{$('#i_en').value=''};
  $('#i_go').onclick=()=>run($('#i_go'),async()=>{toast('이미지를 만드는 중입니다. 10~60초 걸릴 수 있어요.');
-  await api('POST','/api/images',{doc_id:W.id,desc:$('#i_desc').value,style:$('#i_style').value,aspect:$('#i_aspect').value});toast('이미지를 만들었습니다');gallery()});
+  const r=await api('POST','/api/images',{doc_id:W.id,desc:$('#i_desc').value,prompt_en:$('#i_en').value,style:$('#i_style').value,aspect:$('#i_aspect').value});
+  if(r.prompt_en){$('#i_en').value=r.prompt_en;$('#i_en').closest('details').open=true}
+  toast(r.prompt_en?'이미지를 만들었습니다. 사용한 영어 설명을 고쳐서 다시 만들 수도 있어요.':'이미지를 만들었습니다');gallery()});
  gallery()}
 async function gallery(){const im=await api('GET','/api/images?doc_id='+W.id);
  $('#i_gal').innerHTML=im.length?`<div class="small mute" style="margin-bottom:6px">이 원고의 이미지 ${im.length}개 — '복사' 후 네이버 글쓰기에서 Ctrl+V 하거나, 저장해서 올리세요.</div>

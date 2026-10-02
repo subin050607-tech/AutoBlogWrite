@@ -33,12 +33,30 @@ class ImageError(Exception):
 
 
 def build_prompt(desc: str, style: str, aspect: str) -> str:
+    """주제를 맨 앞에 두고 스타일·금지사항을 뒤에 붙인다(이미지 모델은 앞부분을 가장 중요하게 본다)."""
     desc = (desc or "").strip()
     if not desc:
         raise ValueError("어떤 이미지를 만들지 설명을 입력하세요.")
     st = STYLES.get(style, STYLES["illust"])[1]
-    return (f"{desc}. Style: {st}. Aspect ratio {aspect}. For a Korean blog post. "
-            "Do not include any text, letters, captions, logos or watermarks in the image.")
+    return f"{desc}. {st}. No text, no letters, no captions, no logos, no watermark."
+
+
+ENGLISH_SYSTEM = """You write prompts for an AI image generator. Output JSON only: {"prompt": "..."}.
+Turn the Korean image description into ONE concrete English prompt (25-60 words):
+main subject first, then what they are doing, setting/background, key objects, mood and lighting.
+Use the blog title/keyword only as context so the picture matches the article. Do not add text or letters to the image.
+Never add people, places or objects that contradict the description."""
+
+
+def to_english(client, desc: str, title: str = "", keyword: str = "") -> str:
+    """한국어 설명 → 구체적인 영어 프롬프트. 실패하면 빈 문자열(원문 사용)."""
+    user = f"Blog title: {title}\nKeyword: {keyword}\nImage description (Korean): {desc}"
+    try:
+        d = llm.complete_json(client, ENGLISH_SYSTEM, user, temperature=0.4)
+    except Exception:
+        return ""
+    out = str(d.get("prompt", "") if isinstance(d, dict) else "").strip()
+    return out[:600]
 
 
 class GeminiImage:
@@ -65,7 +83,7 @@ class GeminiImage:
         if not models:
             raise ImageError("이 Gemini 키로 쓸 수 있는 이미지 생성 모델을 찾지 못했습니다. 설정에서 이미지 생성 방식을 "
                              "'Pollinations(키 없음)'으로 바꿔 보세요.", 404)
-        body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        body = {"contents": [{"role": "user", "parts": [{"text": f"{prompt} Aspect ratio {aspect}."}]}],
                 "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}}
         last: Exception | None = None
         for name in models[:3]:
