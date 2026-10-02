@@ -1,0 +1,45 @@
+# autoblog 설정 (config.yaml 로 복사해서 사용)
+
+llm:
+  provider: anthropic          # anthropic | mock(오프라인 테스트용)
+  model: claude-sonnet-5-5
+  max_tokens: 6000
+  temperature: 0.8
+
+blog:
+  publisher: naver             # naver(실제 발행) | file(HTML 파일로만 저장)
+  endpoint: https://api.blog.naver.com/xmlrpc
+  default_category: ""         # 비워두면 카테고리 미지정
+  publish: true                # false면 네이버에 '임시저장'에 가깝게 비공개 처리 시도(API 지원 범위 내)
+  ai_disclosure: true          # 글 하단에 "AI 도움을 받아 작성" 문구 삽입
+  ai_disclosure_text: "※ 이 글은 AI의 도움을 받아 작성되었으며, 게시 전 직접 검토했습니다."
+
+persona:
+  blog_theme: "일상 정보 블로그"      # 블로그 성격 (글 톤 결정에 사용)
+  tone: "친근하고 신뢰감 있는 존댓말(~해요/~입니다 혼용)"
+  audience: "해당 주제를 처음 검색해 보는 일반 독자"
+  min_chars: 1500              # 공백 제외 최소 글자 수
+  max_chars: 5000
+  extra_rules:                 # 모든 글에 공통 적용할 규칙
+    - "과장·허위 정보, 확인되지 않은 수치는 쓰지 않는다"
+    - "광고/협찬처럼 보이는 표현을 쓰지 않는다"
+
+quality:
+  require_keyword_in_title: true
+  max_keyword_density: 0.04    # 본문 대비 키워드 비율 상한 (키워드 스팸 방지)
+  min_headings: 2
+  title_similarity_limit: 0.8  # 기존 제목과 이 이상 비슷하면 중복으로 간주
+  banned_words: []             # 포함되면 재생성
+  max_regenerations: 2
+
+schedule:
+  active_hours: [9, 22]        # 이 시간대(시)에만 발행
+  daily_limit: 2               # 하루 최대 발행 수
+  min_interval_minutes: 180    # 발행 간 최소 간격
+  jitter_minutes: 40           # 간격에 ± 랜덤 편차 (기계적 패턴 방지)
+  poll_seconds: 60
+
+paths:
+  db: data/autoblog.db
+  output: output
+  images: images               # 주제별 이미지 폴더 기본 위치

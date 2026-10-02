@@ -1,0 +1,19 @@
+[project]
+name = "autoblog"
+version = "0.1.0"
+description = "네이버 블로그 글 작성·발행 자동화 도구"
+requires-python = ">=3.10"
+dependencies = ["pyyaml>=6", "anthropic>=0.40"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+autoblog = "autoblog.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["autoblog"]
