@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BlogScope 네이버 글쓰기 도우미",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "BlogScope 에서 만든 원고를 내 네이버 블로그 글쓰기 창에 채워 넣습니다. 발행 버튼은 직접 누릅니다.",
   "permissions": ["storage"],
   "host_permissions": ["https://blog.naver.com/*"],

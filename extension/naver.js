@@ -110,7 +110,7 @@
     const editable = [...document.querySelectorAll("[contenteditable]")].slice(0, 6).map(desc);
     const chain = (e) => { const out = []; for (let x = e, i = 0; x && i < 6; x = x.parentElement, i++) out.push(desc(x)); return out; };
     return JSON.stringify({
-      ext: "0.1.1", path: location.pathname.replace(/\/[0-9]+/g, "/N"), top: window === window.top,
+      ext: "0.1.2", path: location.pathname.replace(/\/[0-9]+/g, "/N"), top: window === window.top,
       iframes: document.querySelectorAll("iframe").length,
       selectors: Object.fromEntries([...SEL.title, ...SEL.body, ...SEL.editor].map((s) => [s, document.querySelectorAll(s).length])),
       title: t && chain(t), body: b && chain(b), activeAfterClick: afterClick, editable,
@@ -144,8 +144,11 @@
       .t{color:#666;font-size:12px;margin-top:6px}</style>
       <div class="b"><button class="x" id="x" title="닫기">×</button><h4>✍️ BlogScope 원고</h4>
       <div class="t" id="tt"></div><div class="s" id="s">준비 중…</div>
-      <button id="bt">제목 넣기</button><button id="bb">본문 넣기</button><br>
-      <button class="g" id="cb">본문 복사</button><button class="g" id="ct">태그 복사</button><button class="g" id="dg">진단 정보 복사</button>
+      <div class="t"><b>복사 → 붙여넣기</b> (자동 입력이 안 될 때 가장 확실한 방법)</div>
+      <button id="c1">① 제목 복사</button><button id="cb">② 본문 복사</button><button class="g" id="ct">③ 태그 복사</button>
+      <div class="t">버튼을 누른 뒤 해당 칸을 클릭하고 <b>Ctrl+V</b></div>
+      <div class="t" style="margin-top:8px">자동 입력 다시 시도: <button class="g" id="bt">제목 넣기</button><button class="g" id="bb">본문 넣기</button>
+      <button class="g" id="dg">진단 정보 복사</button></div>
       <div class="t">내용을 확인한 뒤 오른쪽 위 <b>[발행]</b>을 직접 눌러주세요. 태그는 발행 창에 붙여넣으세요.</div></div>`;
     document.documentElement.appendChild(host);
     const $ = (id) => root.getElementById(id);
@@ -163,7 +166,11 @@
       try { await navigator.clipboard.writeText(info); status("진단 정보를 복사했습니다. 개발 대화창에 붙여넣어 보내주세요."); }
       catch (e) { status(info); }
     };
-    $("cb").onclick = async () => status((await copyToClipboard(p, true)) ? "본문을 복사했습니다. 본문을 클릭하고 Ctrl+V 하세요." :
+    $("c1").onclick = async () => {
+      try { await navigator.clipboard.writeText(p.title); status("① 제목을 복사했습니다 → 위의 '제목' 칸을 클릭하고 Ctrl+V"); }
+      catch (e) { status("복사 실패. 제목: " + p.title); }
+    };
+    $("cb").onclick = async () => status((await copyToClipboard(p, true)) ? "② 본문을 복사했습니다 → 본문 칸을 클릭하고 Ctrl+V (서식 유지)" :
       "복사에 실패했습니다. BlogScope 화면에서 복사 버튼을 이용하세요.");
     $("ct").onclick = async () => {
       const tags = (p.tags || []).map((t) => "#" + t).join(" ");
@@ -194,8 +201,8 @@
     const b = await insertBody(p);
     status(t === "ok" && b === "ok" ? "✔ 제목과 본문을 넣었습니다.\n사진 자리에 사진을 넣고, 확인 후 [발행]을 눌러주세요."
       : (t === "ok" ? "✔ 제목은 넣었습니다. " : "제목 자동 입력 실패(제목은 직접 입력). ") +
-        (b === "ok" ? "✔ 본문은 넣었습니다." : "본문 자동 입력 실패 → 본문 클릭 후 Ctrl+V (BlogScope가 미리 복사해 둠).") +
-        (t !== "ok" || b !== "ok" ? "\n[진단 정보 복사]를 눌러 보내주시면 고칠 수 있어요." : ""));
+        (b === "ok" ? "✔ 본문은 넣었습니다." : "본문 자동 입력 실패.") +
+        (t !== "ok" || b !== "ok" ? "\n아래 ①②③ 버튼으로 복사해서 붙여넣어 주세요." : ""));
   }
 
   main();
