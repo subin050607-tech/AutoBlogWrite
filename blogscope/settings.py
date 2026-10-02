@@ -19,6 +19,7 @@ FIELDS = {
     "llm_api_key": "LLM_API_KEY",            # openai_compat 일 때
     "image_provider": "IMAGE_PROVIDER",      # gemini(기본) | pollinations(키 없음)
     "image_model": "IMAGE_MODEL",            # 비우면 자동 선택
+    "my_blog_id": "MY_BLOG_ID",              # 네이버로 보내기: 내 블로그 글쓰기 창 주소
     "nickname": "BLOG_NICKNAME",             # 글 스타일: '○○의 한마디'
     "signature": "BLOG_SIGNATURE",           # 글 끝 고정 인사말(여러 줄)
     "style_example": "STYLE_EXAMPLE",        # '내 글 스타일' 예시 글
@@ -43,7 +44,7 @@ class Settings:
         for k, v in values.items():
             if k in FIELDS and isinstance(v, str) and v.strip() != "":
                 self.data[k] = v.strip()[:8000]
-            elif k in ("nickname", "signature", "style_example", "image_model", "llm_model") and v == "":
+            elif k in ("my_blog_id", "nickname", "signature", "style_example", "image_model", "llm_model") and v == "":
                 self.data.pop(k, None)  # 공개 항목은 빈 값으로 지울 수 있다
             elif k in FIELDS and v is None:  # 명시적 삭제
                 self.data.pop(k, None)

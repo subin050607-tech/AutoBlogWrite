@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "BlogScope 네이버 글쓰기 도우미",
+  "version": "0.1.0",
+  "description": "BlogScope 에서 만든 원고를 내 네이버 블로그 글쓰기 창에 채워 넣습니다. 발행 버튼은 직접 누릅니다.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://blog.naver.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["http://127.0.0.1/*", "http://localhost/*"],
+      "js": ["bridge.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://blog.naver.com/*"],
+      "js": ["naver.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ]
+}

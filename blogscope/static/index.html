@@ -140,8 +140,8 @@ function readDoc(){const d=W.doc;d.title=$('#d_title').value;d.intro=$('#d_intro
 const ta=(id,v,h)=>`<textarea id="${id}" style="min-height:${h||160}px">${esc(v)}</textarea>`;
 function showDoc(){const d=W.doc,g=W.diag;
  $('#w_out').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">③ 원고 <span class="mute small">#${W.id}</span></h2>
- <div class="row"><button class="btn" id="d_copy">📋 네이버에 붙여넣기용 복사</button><button class="btn g" id="d_txt">텍스트 복사</button><button class="btn g" id="d_save">저장·재진단</button><button class="btn g" id="d_pv">미리보기</button><button class="btn g" id="d_thumb">🖼 썸네일</button><button class="btn g" id="d_img">🎨 이미지</button></div></div>
- <p class="small mute">복사 후 네이버 블로그 글쓰기 본문에 붙여넣으세요. 제목은 에디터 제목칸에 따로 입력합니다. <b>[사진: …]</b> 자리에 직접 찍은 사진을 넣고, <b>[확인 필요: …]</b> 는 꼭 사실을 확인해 고쳐주세요.</p>
+ <div class="row"><button class="btn" id="d_send">🚀 네이버로 보내기</button><button class="btn g" id="d_copy">📋 붙여넣기용 복사</button><button class="btn g" id="d_txt">텍스트 복사</button><button class="btn g" id="d_save">저장·재진단</button><button class="btn g" id="d_pv">미리보기</button><button class="btn g" id="d_thumb">🖼 썸네일</button><button class="btn g" id="d_img">🎨 이미지</button></div></div>
+ <p class="small mute"><b>🚀 네이버로 보내기</b>: 확장 프로그램이 내 네이버 글쓰기 창을 열고 제목·본문을 채웁니다(발행은 직접). 확장이 없으면 복사 후 네이버 글쓰기 본문에 붙여넣으세요. 제목은 에디터 제목칸에 따로 입력합니다. <b>[사진: …]</b> 자리에 직접 찍은 사진을 넣고, <b>[확인 필요: …]</b> 는 꼭 사실을 확인해 고쳐주세요.</p>
  <div id="d_pvbox"></div><div id="d_thumbbox"></div><div id="d_imgbox"></div>
  <label class="f">제목</label><input id="d_title" value="${esc(d.title)}">
  <div class="sec"><div class="row" style="justify-content:space-between"><b>도입부</b><button class="btn g s" data-rw="intro">다시 쓰기</button></div>${ta('d_intro',d.intro,130)}</div>
@@ -158,12 +158,24 @@ function showDoc(){const d=W.doc,g=W.diag;
  const save=async()=>{const r=await api('POST','/api/docs/'+W.id,{doc:readDoc()});setDoc(r);return r};
  $('#d_save').onclick=()=>run($('#d_save'),async()=>{await save();showDoc();toast('저장했습니다')});
  $('#d_copy').onclick=async()=>{try{await save();await copyHtml(W.html,W.text);toast('복사했습니다. 네이버 글쓰기 본문에 붙여넣으세요(Ctrl+V).')}catch(e){toast(e.message,true)}};
+ $('#d_send').onclick=()=>run($('#d_send'),async()=>{await save();await copyHtml(W.html,W.text).catch(()=>{});
+  const d=W.doc,ok=await sendToNaver({title:d.title,html:W.html,text:W.text,tags:d.hashtags,blogId:S.my_blog_id||''});
+  if(ok)toast('네이버 글쓰기 창을 열었습니다. 내용 확인 후 [발행]을 직접 눌러주세요.');
+  else{toast('확장 프로그램이 없어 자동 입력은 못 했습니다. 본문은 복사해 두었어요 — 네이버 글쓰기 본문에 Ctrl+V 하세요.',true);
+   window.open(S.my_blog_id?`https://blog.naver.com/${encodeURIComponent(S.my_blog_id)}/postwrite`:'https://blog.naver.com/GoBlogWrite.naver','_blank','noopener')}});
  $('#d_txt').onclick=async()=>{try{await save();await copyText(W.text);toast('텍스트를 복사했습니다.')}catch(e){toast(e.message,true)}};
  $('#d_pv').onclick=async()=>{await save();$('#d_pvbox').innerHTML=`<h3>미리보기</h3><div id="pv"><h2 style="color:#222">${esc(W.doc.title)}</h2>${W.html}</div><p></p>`};
  $('#d_thumb').onclick=()=>thumb(readDoc().title,W.inp.keyword);
  $('#d_img').onclick=()=>imgPanel();
  document.querySelectorAll('[data-rw]').forEach(b=>b.onclick=()=>{const ins=prompt('어떻게 바꿀까요? (비워두면 자연스럽게 다시 씁니다)\n예: 더 짧게 / 예시 추가 / 목록으로 정리','');if(ins===null)return;
   run(b,async()=>{const r=await api('POST','/api/writer/rewrite',{id:W.id,part:b.dataset.rw,instruction:ins,doc:readDoc()});setDoc(r);showDoc();toast(r.notice||'다시 썼습니다')})})}
+/* ---------------- 확장 프로그램 연결 ---------------- */
+let EXT=false;window.addEventListener('message',e=>{if(e.source===window&&e.data&&e.data.type==='BLOGSCOPE_EXT_READY')EXT=true});
+window.postMessage({type:'BLOGSCOPE_PING'},location.origin);
+function sendToNaver(payload){return new Promise(res=>{if(!EXT)return res(false);let done=false;
+ const on=e=>{if(e.source===window&&e.data&&e.data.type==='BLOGSCOPE_SENT'){done=true;window.removeEventListener('message',on);res(!!e.data.ok)}};
+ window.addEventListener('message',on);window.postMessage({type:'BLOGSCOPE_SEND',payload},location.origin);
+ setTimeout(()=>{if(!done){window.removeEventListener('message',on);res(false)}},3000)})}
 async function copyHtml(h,t){try{await navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([t],{type:'text/plain'})})])}
  catch(e){const d=document.createElement('div');d.contentEditable='true';d.innerHTML=h;d.style.position='fixed';d.style.left='-9999px';document.body.appendChild(d);
   const r=document.createRange();r.selectNodeContents(d);const s=getSelection();s.removeAllRanges();s.addRange(r);const ok=document.execCommand('copy');s.removeAllRanges();d.remove();if(!ok)throw new Error('복사에 실패했습니다. 미리보기에서 직접 드래그해 복사하세요.')}}
@@ -315,9 +327,14 @@ async function pHist(){const [b,k]=await Promise.all([api('GET','/api/history?ki
 function pSet(){const f=(id,l,ph)=>`<label class="small"><b>${l}</b></label><input id="${id}" placeholder="${esc(ph)}" value="${esc(String(S[id]||'').includes('•')?'':S[id]||'')}" autocomplete="off"><p></p>`;
  const tf=(id,l,ph,h)=>`<label class="small"><b>${l}</b></label><textarea id="${id}" style="min-height:${h||90}px" placeholder="${esc(ph)}">${esc(S[id]||'')}</textarea><p></p>`;
  $('#main').innerHTML=`<div class="card"><h2>🎨 글 스타일</h2><p class="small mute">글쓰기에서 '감성 정리형'이나 '내 글 스타일'을 고르면 아래 정보가 쓰입니다.</p>
+ ${f('my_blog_id','내 네이버 블로그 아이디 (네이버로 보내기용, blog.naver.com/아이디)','예: kth7405')}
  ${f('nickname','블로그 닉네임 (마무리 “○○의 한마디”에 사용)','예: 해일')}
  ${tf('signature','글 끝 고정 인사말 (한 줄에 하나, 최대 5줄)','💜 "당신의 인생2막을 언제나 응원합니다."\n🌿 "오늘도 행복한 하루 보내세요."',70)}
  ${tf('style_example','내 글 예시 (\'내 글 스타일\'용 — 내 블로그 글 하나를 통째로 붙여넣기, 100자 이상)','내 블로그 글 본문을 그대로 붙여넣으세요. AI가 말투·문단 호흡·이모지 쓰는 방식을 따라 씁니다.',160)}</div>
+ <div class="card"><h2>🚀 네이버로 보내기 (크롬 확장) ${EXT?'<span class="ok">● 설치됨</span>':'<span class="mute">○ 미설치</span>'}</h2>
+ <ol class="steps small"><li>크롬 주소창에 <code>chrome://extensions</code> 입력</li><li>오른쪽 위 <b>개발자 모드</b> 켜기</li>
+ <li><b>압축해제된 확장 프로그램을 로드합니다</b> → BlogScope 폴더 안의 <code>extension</code> 폴더 선택</li><li>이 페이지를 새로고침(F5)</li></ol>
+ <p class="small mute">원고 화면의 '🚀 네이버로 보내기'를 누르면 내 네이버 글쓰기 창이 열리고 제목·본문이 채워집니다. <b>발행 버튼은 직접</b> 눌러 확인 후 발행하세요(자동 대량 게시는 네이버 정책상 제재될 수 있습니다).</p></div>
  <div class="card"><h2>🖼 이미지 생성</h2><div class="row small" style="margin:6px 0 10px"><b>생성 방식</b>
  <label><input type="radio" name="imgp" value="gemini" style="width:auto" ${S.image_provider!=='pollinations'?'checked':''}> Gemini (글쓰기용 키 사용)</label>
  <label><input type="radio" name="imgp" value="pollinations" style="width:auto" ${S.image_provider==='pollinations'?'checked':''}> Pollinations (키 없이 무료, 외부 서비스)</label></div>
@@ -348,7 +365,7 @@ function pSet(){const f=(id,l,ph)=>`<label class="small"><b>${l}</b></label><inp
  ${f('searchad_api_key','엑세스라이선스 (API KEY)',S.searchad_api_key?'저장됨 — 바꿀 때만 입력':'')}${f('searchad_secret','비밀키 (SECRET KEY)',S.searchad_secret?'저장됨 — 바꿀 때만 입력':'')}${f('searchad_customer_id','CUSTOMER_ID','')}</div>
  <div class="card"><button class="btn" id="save">저장</button> <span class="mute small">키는 이 컴퓨터의 data/settings.json 에만 저장되며 외부로 보내지 않습니다(네이버 API 호출 제외).</span></div>`;
  $('#save').onclick=()=>run($('#save'),async()=>{const v={naver_api_source:document.querySelector('input[name=src]:checked').value,llm_provider:document.querySelector('input[name=llmp]:checked').value,image_provider:document.querySelector('input[name=imgp]:checked').value,
-  nickname:$('#nickname').value.trim(),signature:$('#signature').value.trim(),style_example:$('#style_example').value.trim(),image_model:$('#image_model').value.trim(),llm_model:$('#llm_model').value.trim()};['gemini_api_key','llm_model','llm_base_url','llm_api_key','naver_client_id','naver_client_secret','searchad_api_key','searchad_secret','searchad_customer_id'].forEach(k=>{const x=$('#'+k).value.trim();if(x)v[k]=x});
+  my_blog_id:$('#my_blog_id').value.trim(),nickname:$('#nickname').value.trim(),signature:$('#signature').value.trim(),style_example:$('#style_example').value.trim(),image_model:$('#image_model').value.trim(),llm_model:$('#llm_model').value.trim()};['gemini_api_key','llm_model','llm_base_url','llm_api_key','naver_client_id','naver_client_secret','searchad_api_key','searchad_secret','searchad_customer_id'].forEach(k=>{const x=$('#'+k).value.trim();if(x)v[k]=x});
   S=await api('POST','/api/settings',v);toast('저장했습니다');pSet()})}
 
 (async()=>{try{S=await api('GET','/api/settings');OPT=await api('GET','/api/writer/options')}catch(e){}go('write')})();
