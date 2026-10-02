@@ -15,7 +15,15 @@ nav button.on{background:var(--pri);color:#fff}main{max-width:1080px;margin:18px
 h2{font-size:17px;margin:0 0 10px}h3{font-size:15px;margin:0 0 8px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row>.grow{flex:1;min-width:200px}
 input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
-textarea{min-height:150px}
+textarea{min-height:150px;line-height:1.7}
+select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
+label.f{display:block;font-size:13px;font-weight:700;margin:10px 0 4px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 12px}
+.sec{border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0;background:var(--bg)}
+.sec textarea{background:var(--card)}.sec input{background:var(--card)}
+.chk{display:inline-flex;gap:6px;align-items:center;margin:8px 14px 0 0;font-size:14px}.chk input{width:auto}
+#pv{background:#fff;color:#222;border-radius:10px;padding:20px;border:1px solid var(--line)}
+canvas{max-width:100%;height:auto;border-radius:8px;border:1px solid var(--line)}
 .btn{font:inherit;cursor:pointer;background:var(--pri);color:#fff;border:1px solid var(--pri);border-radius:8px;padding:9px 16px;white-space:nowrap}
 .btn.g{background:var(--card);color:var(--fg);border-color:var(--line)}.btn.s{padding:4px 10px;font-size:13px}
 .btn:disabled{opacity:.6;cursor:wait}
@@ -39,11 +47,11 @@ a{color:var(--info)}.chart text{fill:var(--mute);font-size:10px}
 @keyframes r{to{transform:rotate(1turn)}}
 ol.steps{padding-left:20px;margin:6px 0}ol.steps li{margin:3px 0}
 </style></head><body>
-<header><div class="hd"><span class="logo">📊 Blog<b>Scope</b></span><nav id="nav"></nav></div></header>
+<header><div class="hd"><span class="logo">✍️ Blog<b>Scope</b></span><nav id="nav"></nav></div></header>
 <main id="main"></main><div id="msg"></div>
 <script>
-const TABS=[['blog','블로그 분석'],['kw','키워드 분석'],['rank','순위 확인'],['post','포스팅 진단'],['cmp','블로그 비교'],['hist','기록'],['set','설정']];
-let tab='blog',S={};
+const TABS=[['write','✍️ 글쓰기'],['docs','내 원고'],['blog','블로그 분석'],['kw','키워드 분석'],['rank','순위 확인'],['post','포스팅 진단'],['cmp','블로그 비교'],['hist','기록'],['set','설정']];
+let tab='write',S={},OPT=null,W={};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>n==null?'-':Number(n).toLocaleString('ko-KR');
@@ -56,7 +64,7 @@ async function api(method,url,body){const r=await fetch(url,{method,headers:{'Co
 async function run(btn,fn){const t=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="spin"></span> 분석 중';try{return await fn()}catch(e){toast(e.message,true)}finally{btn.disabled=false;btn.innerHTML=t}}
 function nav(){$('#nav').innerHTML=TABS.map(([k,v])=>`<button class="${k===tab?'on':''}" data-t="${k}">${v}</button>`).join('');
  document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>go(b.dataset.t))}
-function go(t,arg){tab=t;nav();({blog:pBlog,kw:pKw,rank:pRank,post:pPost,cmp:pCmp,hist:pHist,set:pSet})[t](arg)}
+function go(t,arg){tab=t;nav();({write:pWrite,docs:pDocs,blog:pBlog,kw:pKw,rank:pRank,post:pPost,cmp:pCmp,hist:pHist,set:pSet})[t](arg)}
 const gcol=g=>`var(--g${g in{S:1,A:1,B:1,C:1,D:1}?g:'D'})`;
 const badge=(g,n)=>`<span class="badge" style="background:${gcol(g)}">${esc(g)} · ${esc(n)}</span>`;
 const stat=(v,l)=>`<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
@@ -72,6 +80,117 @@ function line(data,h=140,key='value',lab='label'){if(!data||data.length<2)return
  return `<svg class="chart" viewBox="-10 0 ${W+20} ${h+30}" width="100%" style="max-height:${h+40}px"><polyline points="${pts}" fill="none" stroke="var(--pri)" stroke-width="2.5"/>
  ${vals.map((v,i)=>`<circle cx="${i*step}" cy="${y(v)}" r="3" fill="var(--pri)"><title>${esc(data[i][lab])}: ${v}</title></circle>`).join('')}
  ${data.map((d,i)=>i%every===0||i===data.length-1?`<text x="${i*step}" y="${h+26}" text-anchor="middle">${esc(String(d[lab]).slice(2,10))}</text>`:'').join('')}</svg>`}
+
+
+/* ---------------- 글쓰기 ---------------- */
+const sel=(id,obj,v)=>`<select id="${id}">${Object.entries(obj).map(([k,n])=>`<option value="${k}" ${k===v?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
+function pWrite(){if(!OPT){$('#main').innerHTML='<div class="card">불러오는 중…</div>';api('GET','/api/writer/options').then(o=>{OPT=o;pWrite()}).catch(e=>toast(e.message,true));return}
+ const i=W.inp||{};
+ $('#main').innerHTML=`${S.has_llm?'':`<div class="note" style="margin-bottom:14px">🔑 글쓰기는 <b>무료 Gemini API 키</b>가 필요합니다. <a href="#" onclick="go('set');return false">설정에서 입력하기</a></div>`}
+ <div class="card"><h2>① 글 정보</h2>
+ <div class="two"><div><label class="f">핵심 키워드 *</label><input id="w_kw" placeholder="예: 임플란트 비용" value="${esc(i.keyword)}"></div>
+ <div><label class="f">주제·방향 (선택)</label><input id="w_topic" placeholder="예: 60대 부모님 임플란트 고민" value="${esc(i.topic)}"></div></div>
+ <div class="two"><div><label class="f">글 목적</label>${sel('w_purpose',OPT.purposes,i.purpose)}</div><div><label class="f">말투</label>${sel('w_tone',OPT.tones,i.tone)}</div>
+ <div><label class="f">분량</label>${sel('w_length',OPT.lengths,i.length||'normal')}</div><div><label class="f">업종 패턴</label>${sel('w_pattern',OPT.patterns,i.pattern)}</div></div>
+ <div id="w_rules" class="small mute"></div>
+ <label class="f">타깃 독자 (선택)</label><input id="w_aud" placeholder="예: 처음 알아보는 50~60대" value="${esc(i.audience)}">
+ <label class="f">필수 포함 내용 — 가격·위치·영업시간·직접 경험 등 <span class="mute">(AI는 이 내용만 사실로 씁니다)</span></label>
+ <textarea id="w_facts" style="min-height:90px" placeholder="예: 강남역 3번 출구 도보 5분 / 상담 무료 / 직접 가보니 대기 20분">${esc(i.facts)}</textarea>
+ <div class="two"><div><label class="f">쓰지 말 표현 (선택)</label><input id="w_ban" value="${esc(i.banned)}"></div><div><label class="f">추가 요청 (선택)</label><input id="w_extra" placeholder="예: 비교표 느낌으로 정리" value="${esc(i.extra)}"></div></div>
+ <label class="chk"><input type="checkbox" id="w_faq" ${i.faq?'checked':''}> FAQ 넣기</label>
+ <label class="chk"><input type="checkbox" id="w_photo" ${i.photo_marks===false?'':'checked'}> 사진 넣을 위치 표시</label>
+ <label class="chk"><input type="checkbox" id="w_refs" ${S.has_search?'checked':'disabled'}> 상위 노출 글 참고 ${S.has_search?'':'<span class="mute">(검색 API 필요)</span>'}</label>
+ <p><button class="btn" id="w_plan">제목·목차 만들기</button></p></div><div id="w_out"></div>`;
+ const showRules=()=>{const r=OPT.pattern_rules[$('#w_pattern').value]||[];$('#w_rules').innerHTML=r.length?'⚖️ 이 업종은 아래 표현을 피하도록 작성합니다(광고 관련 법령 주의 — 최종 검토는 직접 해주세요): '+r.map(esc).join(' · '):''};
+ $('#w_pattern').onchange=showRules;showRules();
+ $('#w_plan').onclick=()=>run($('#w_plan'),async()=>{W={inp:readInp()};const r=await api('POST','/api/writer/plan',{input:W.inp,use_refs:$('#w_refs').checked});
+  Object.assign(W,{inp:r.input,plan:r,refs:r.refs,volume:r.volume});showPlan()});
+ if(W.doc)showDoc();else if(W.plan)showPlan()}
+function readInp(){return{keyword:$('#w_kw').value,topic:$('#w_topic').value,purpose:$('#w_purpose').value,tone:$('#w_tone').value,length:$('#w_length').value,
+ pattern:$('#w_pattern').value,audience:$('#w_aud').value,facts:$('#w_facts').value,banned:$('#w_ban').value,extra:$('#w_extra').value,faq:$('#w_faq').checked,photo_marks:$('#w_photo').checked}}
+function showPlan(){const p=W.plan,v=W.volume;
+ $('#w_out').innerHTML=`<div class="card"><h2>② 제목·목차 고르기</h2>
+ ${v?`<p class="small">📈 “${esc(v.keyword)}” 월간 검색량 <b>${fmt(v.total)}</b> (PC ${fmt(v.pc)} · 모바일 ${fmt(v.mobile)})</p>`:''}
+ ${W.refs&&W.refs.length?`<details class="small"><summary>참고한 상위 노출 글 ${W.refs.length}개</summary><ol>${W.refs.map(r=>`<li><a href="${safeUrl(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a> <span class="mute">${esc(r.blogger)}</span></li>`).join('')}</ol></details>`:''}
+ <label class="f">제목</label>${p.titles.map((t,k)=>`<label class="chk" style="display:flex"><input type="radio" name="w_t" value="${k}" ${k===0?'checked':''}> ${esc(t)}</label>`).join('')}
+ <input id="w_title" style="margin-top:8px" value="${esc(p.titles[0])}">
+ <label class="f" style="margin-top:14px">목차 <span class="mute">(소제목을 고치거나 추가·삭제·순서 변경할 수 있어요)</span></label><div id="w_ol"></div>
+ <button class="btn g s" id="w_add">+ 소제목 추가</button>
+ <p><button class="btn" id="w_write">본문 쓰기</button> <button class="btn g" id="w_replan">다시 기획</button></p></div>`;
+ document.querySelectorAll('input[name=w_t]').forEach(r=>r.onchange=()=>$('#w_title').value=p.titles[+r.value]);
+ const ol=()=>{$('#w_ol').innerHTML=p.outline.map((o,k)=>`<div class="sec"><div class="row"><b class="mute">${k+1}</b><input class="grow" data-h="${k}" value="${esc(o.heading)}">
+  <button class="btn g s" data-up="${k}">↑</button><button class="btn g s" data-dn="${k}">↓</button><button class="btn g s" data-rm="${k}">삭제</button></div>
+  <input class="small" data-p="${k}" style="margin-top:6px" placeholder="다룰 내용(쉼표로 구분, 선택)" value="${esc((o.points||[]).join(', '))}"></div>`).join('');
+  const sync=()=>{document.querySelectorAll('[data-h]').forEach(x=>p.outline[+x.dataset.h].heading=x.value);document.querySelectorAll('[data-p]').forEach(x=>p.outline[+x.dataset.p].points=x.value.split(',').map(s=>s.trim()).filter(Boolean))};
+  document.querySelectorAll('[data-h],[data-p]').forEach(x=>x.oninput=sync);
+  const mv=(k,d)=>{sync();const j=k+d;if(j<0||j>=p.outline.length)return;[p.outline[k],p.outline[j]]=[p.outline[j],p.outline[k]];ol()};
+  document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>mv(+b.dataset.up,-1));document.querySelectorAll('[data-dn]').forEach(b=>b.onclick=()=>mv(+b.dataset.dn,1));
+  document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();p.outline.splice(+b.dataset.rm,1);ol()})};
+ ol();$('#w_add').onclick=()=>{p.outline.push({heading:'',points:[]});ol()};
+ $('#w_replan').onclick=()=>$('#w_plan').click();
+ $('#w_write').onclick=()=>run($('#w_write'),async()=>{toast('본문을 쓰는 중입니다. 30초~1분 정도 걸릴 수 있어요.');
+  const r=await api('POST','/api/writer/write',{input:W.inp,title:$('#w_title').value,outline:p.outline.filter(o=>o.heading.trim()),titles:p.titles,hashtags:p.hashtags,use_refs:$('#w_refs')?$('#w_refs').checked:true,id:W.id});
+  setDoc(r);showDoc();window.scrollTo(0,$('#w_out').offsetTop-70)})}
+function setDoc(r){Object.assign(W,{id:r.id,inp:r.input,plan:r.plan,doc:r.doc,html:r.html,text:r.text,diag:r.diagnosis})}
+function readDoc(){const d=W.doc;d.title=$('#d_title').value;d.intro=$('#d_intro').value;d.outro=$('#d_outro').value;
+ d.sections.forEach((s,k)=>{s.heading=$('#d_h'+k).value;s.content=$('#d_c'+k).value});(d.faq||[]).forEach((f,k)=>{f.q=$('#d_q'+k).value;f.a=$('#d_a'+k).value});
+ d.hashtags=$('#d_tags').value.split(/[\s,#]+/).filter(Boolean);return d}
+const ta=(id,v,h)=>`<textarea id="${id}" style="min-height:${h||160}px">${esc(v)}</textarea>`;
+function showDoc(){const d=W.doc,g=W.diag;
+ $('#w_out').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">③ 원고 <span class="mute small">#${W.id}</span></h2>
+ <div class="row"><button class="btn" id="d_copy">📋 네이버에 붙여넣기용 복사</button><button class="btn g" id="d_txt">텍스트 복사</button><button class="btn g" id="d_save">저장·재진단</button><button class="btn g" id="d_pv">미리보기</button><button class="btn g" id="d_thumb">🖼 썸네일</button></div></div>
+ <p class="small mute">복사 후 네이버 블로그 글쓰기 본문에 붙여넣으세요. 제목은 에디터 제목칸에 따로 입력합니다. <b>[사진: …]</b> 자리에 직접 찍은 사진을 넣고, <b>[확인 필요: …]</b> 는 꼭 사실을 확인해 고쳐주세요.</p>
+ <div id="d_pvbox"></div><div id="d_thumbbox"></div>
+ <label class="f">제목</label><input id="d_title" value="${esc(d.title)}">
+ <div class="sec"><div class="row" style="justify-content:space-between"><b>도입부</b><button class="btn g s" data-rw="intro">다시 쓰기</button></div>${ta('d_intro',d.intro,130)}</div>
+ ${d.sections.map((s,k)=>`<div class="sec"><div class="row"><input class="grow" id="d_h${k}" value="${esc(s.heading)}" style="font-weight:700"><button class="btn g s" data-rw="${k}">다시 쓰기</button></div>${ta('d_c'+k,s.content)}</div>`).join('')}
+ ${(d.faq||[]).length?`<div class="sec"><b>FAQ</b>${d.faq.map((f,k)=>`<input id="d_q${k}" style="margin-top:8px;font-weight:700" value="${esc(f.q)}">${ta('d_a'+k,f.a,70)}`).join('')}</div>`:''}
+ <div class="sec"><div class="row" style="justify-content:space-between"><b>마무리</b><button class="btn g s" data-rw="outro">다시 쓰기</button></div>${ta('d_outro',d.outro,110)}</div>
+ <label class="f">해시태그</label><input id="d_tags" value="${esc(d.hashtags.map(t=>'#'+t).join(' '))}"></div>
+ <div class="card"><div class="score"><div><div class="big" style="color:${gcol(g.grade)}">${g.score}</div><div class="mute small">/ 100</div></div><div class="grow"><h3 style="margin:0">원고 진단 ${badge(g.grade,g.name)}</h3>
+ <div class="small mute">공백 제외 ${fmt(g.stats.chars)}자 · 키워드 ${g.stats.keyword_count}회 · 사진 자리 ${g.stats.images??'-'}개</div></div></div>
+ <table style="margin-top:8px">${g.checks.filter(c=>c.status!=='good').map(c=>`<tr><td style="width:24px">${{warn:'<b class="wa">▲</b>',bad:'<b class="no">✖</b>',info:'<b class="in">ⓘ</b>'}[c.status]}</td><td style="width:130px"><b>${esc(c.name)}</b></td><td>${esc(c.msg)}</td></tr>`).join('')||'<tr><td class="ok">✔ 모든 항목 양호</td></tr>'}</table>
+ <p class="disc">ⓘ ${esc(g.disclaimer)}</p></div>`;
+ const save=async()=>{const r=await api('POST','/api/docs/'+W.id,{doc:readDoc()});setDoc(r);return r};
+ $('#d_save').onclick=()=>run($('#d_save'),async()=>{await save();showDoc();toast('저장했습니다')});
+ $('#d_copy').onclick=async()=>{try{await save();await copyHtml(W.html,W.text);toast('복사했습니다. 네이버 글쓰기 본문에 붙여넣으세요(Ctrl+V).')}catch(e){toast(e.message,true)}};
+ $('#d_txt').onclick=async()=>{try{await save();await copyText(W.text);toast('텍스트를 복사했습니다.')}catch(e){toast(e.message,true)}};
+ $('#d_pv').onclick=async()=>{await save();$('#d_pvbox').innerHTML=`<h3>미리보기</h3><div id="pv"><h2 style="color:#222">${esc(W.doc.title)}</h2>${W.html}</div><p></p>`};
+ $('#d_thumb').onclick=()=>thumb(readDoc().title,W.inp.keyword);
+ document.querySelectorAll('[data-rw]').forEach(b=>b.onclick=()=>{const ins=prompt('어떻게 바꿀까요? (비워두면 자연스럽게 다시 씁니다)\n예: 더 짧게 / 예시 추가 / 목록으로 정리','');if(ins===null)return;
+  run(b,async()=>{const r=await api('POST','/api/writer/rewrite',{id:W.id,part:b.dataset.rw,instruction:ins,doc:readDoc()});setDoc(r);showDoc();toast('다시 썼습니다')})})}
+async function copyHtml(h,t){try{await navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([t],{type:'text/plain'})})])}
+ catch(e){const d=document.createElement('div');d.contentEditable='true';d.innerHTML=h;d.style.position='fixed';d.style.left='-9999px';document.body.appendChild(d);
+  const r=document.createRange();r.selectNodeContents(d);const s=getSelection();s.removeAllRanges();s.addRange(r);const ok=document.execCommand('copy');s.removeAllRanges();d.remove();if(!ok)throw new Error('복사에 실패했습니다. 미리보기에서 직접 드래그해 복사하세요.')}}
+async function copyText(t){try{await navigator.clipboard.writeText(t)}catch(e){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}}
+
+/* ---------------- 썸네일 (브라우저에서 직접 그림, 무료) ---------------- */
+// [배경, 큰 글씨, 강조색, 강조 글씨]
+const THEMES=[['#03c75a','#ffffff','#ffffff','#03a64b'],['#1f2937','#ffffff','#fbbf24','#1f2937'],['#fff4e6','#3b2a1a','#f97316','#ffffff'],['#eef2ff','#1e1b4b','#6366f1','#ffffff'],['#ffffff','#111111','#ef4444','#ffffff']];
+function thumb(title,kw){$('#d_thumbbox').innerHTML=`<div class="sec"><div class="row" style="justify-content:space-between"><b>썸네일 만들기 (1080×1080)</b><button class="btn g s" onclick="$('#d_thumbbox').innerHTML=''">닫기</button></div>
+ <div class="two"><div><label class="f">큰 글씨</label><input id="t_main" value="${esc(title)}"></div><div><label class="f">작은 글씨</label><input id="t_sub" value="${esc(kw)}"></div></div>
+ <div class="row" style="margin:10px 0">${THEMES.map((t,k)=>`<button class="btn g s" data-th="${k}" style="background:${t[0]};color:${t[1]};border-color:${t[2]}">테마 ${k+1}</button>`).join('')}</div>
+ <canvas id="t_cv" width="1080" height="1080" style="width:360px"></canvas><p><button class="btn" id="t_dl">PNG 저장</button></p></div>`;
+ let th=0;const draw=()=>drawThumb($('#t_cv'),$('#t_main').value,$('#t_sub').value,THEMES[th]);
+ document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{th=+b.dataset.th;draw()});$('#t_main').oninput=draw;$('#t_sub').oninput=draw;draw();
+ $('#t_dl').onclick=()=>$('#t_cv').toBlob(bl=>{const a=document.createElement('a'),u=URL.createObjectURL(bl);a.href=u;
+  a.download='thumbnail-'+new Date().toISOString().slice(0,19).replace(/\D/g,'')+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)},'image/png')}
+function wrapLines(ctx,text,maxW){const out=[];let line='';for(const ch of text){if(ctx.measureText(line+ch).width>maxW&&line){out.push(line);line=ch.trim()?ch:''}else line+=ch}if(line)out.push(line);return out}
+function drawThumb(cv,main,sub,[bg,fg,ac,pt]){const c=cv.getContext('2d'),W=1080,F='"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+ c.fillStyle=bg;c.fillRect(0,0,W,W);c.fillStyle=ac;c.fillRect(0,0,W,24);c.fillRect(0,W-24,W,24);
+ let size=110,lines;do{c.font=`800 ${size}px ${F}`;lines=wrapLines(c,main||'',W-160);size-=6}while(lines.length*size*1.3>620&&size>48);size+=6;
+ const lh=size*1.3,top=(W-lines.length*lh)/2+size*0.35;c.fillStyle=fg;c.textAlign='center';c.textBaseline='middle';
+ lines.forEach((l,k)=>c.fillText(l,W/2,top+k*lh));
+ if(sub){c.font=`700 46px ${F}`;const tw=c.measureText(sub).width+60,y=top-lh/2-90;c.fillStyle=ac;c.beginPath();c.roundRect?c.roundRect(W/2-tw/2,y-38,tw,76,38):c.rect(W/2-tw/2,y-38,tw,76);c.fill();
+  c.fillStyle=pt;c.fillText(sub,W/2,y+2)}}
+
+/* ---------------- 내 원고 ---------------- */
+async function pDocs(){const ds=await api('GET','/api/docs');
+ $('#main').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">내 원고 ${ds.length}개</h2><button class="btn" onclick="W={};go('write')">+ 새 글</button></div>
+ ${ds.length?`<table>${ds.map(d=>`<tr><td><a href="#" data-open="${d.id}">${esc(d.title||'(제목 없음)')}</a><div class="mute small">${esc(d.keyword)}</div></td><td class="mute small n">${esc(d.updated_at.replace('T',' ').slice(0,16))}</td>
+ <td class="n"><button class="btn g s" data-del="${d.id}">삭제</button></td></tr>`).join('')}</table>`:'<p class="mute">아직 원고가 없습니다.</p>'}</div>`;
+ document.querySelectorAll('[data-open]').forEach(a=>a.onclick=async e=>{e.preventDefault();try{const r=await api('GET','/api/docs/'+a.dataset.open);W={};setDoc(r);go('write')}catch(x){toast(x.message,true)}});
+ document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(!confirm('이 원고를 삭제할까요?'))return;await api('DELETE','/api/docs/'+b.dataset.del);if(W.id==b.dataset.del)W={};pDocs()})}
 
 /* ---------------- 블로그 분석 ---------------- */
 function pBlog(pre){$('#main').innerHTML=`<div class="card"><h2>블로그 분석</h2><p class="mute small">블로그 아이디나 주소를 넣으면 활동량·꾸준함·최근성·검색 노출을 분석해 점수를 매깁니다.</p>
@@ -165,7 +284,15 @@ async function pHist(){const [b,k]=await Promise.all([api('GET','/api/history?ki
 
 /* ---------------- 설정 ---------------- */
 function pSet(){const f=(id,l,ph)=>`<label class="small"><b>${l}</b></label><input id="${id}" placeholder="${esc(ph)}" value="${esc(String(S[id]||'').includes('•')?'':S[id]||'')}" autocomplete="off"><p></p>`;
- $('#main').innerHTML=`<div class="card"><h2>① 네이버 검색 API ${S.has_search?'<span class="ok">● 연결됨</span>':'<span class="mute">○ 미설정</span>'}</h2>
+ $('#main').innerHTML=`<div class="card"><h2>✍️ 글쓰기 AI ${S.has_llm?'<span class="ok">● 연결됨</span>':'<span class="mute">○ 미설정</span>'}</h2>
+ <div class="row small" style="margin:6px 0 10px"><b>AI 종류</b>
+ <label><input type="radio" name="llmp" value="gemini" style="width:auto" ${S.llm_provider!=='openai_compat'?'checked':''}> Google Gemini (무료, 추천)</label>
+ <label><input type="radio" name="llmp" value="openai_compat" style="width:auto" ${S.llm_provider==='openai_compat'?'checked':''}> OpenAI 호환 (Groq·OpenRouter·Ollama 등)</label></div>
+ <ol class="steps small"><li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>에 구글 계정으로 로그인 (카드 등록 불필요)</li><li><b>Create API key</b> → 만들어진 키를 아래에 붙여넣기</li></ol>
+ <p class="small mute">무료 등급은 분당·일일 사용 한도가 있고, 입력 내용이 구글의 서비스 개선에 쓰일 수 있습니다. 개인정보·민감한 내용은 넣지 마세요.</p>
+ ${f('gemini_api_key','Gemini API 키',S.gemini_api_key?'저장됨 — 바꿀 때만 입력':'AIza…')}${f('llm_model','모델 이름 (비우면 gemini-2.5-flash)','gemini-2.5-flash')}
+ <details class="small"><summary>OpenAI 호환 설정</summary><p></p>${f('llm_base_url','주소 (base URL)','https://api.groq.com/openai/v1')}${f('llm_api_key','API 키',S.llm_api_key?'저장됨 — 바꿀 때만 입력':'')}</details></div>
+ <div class="card"><h2>① 네이버 검색 API ${S.has_search?'<span class="ok">● 연결됨</span>':'<span class="mute">○ 미설정</span>'}</h2>
  <p class="small mute">블로그 검색 노출·순위 확인·발행량·검색 추이에 사용합니다.</p>
  <div class="row small" style="margin:6px 0 10px"><b>키 발급처</b>
  <label><input type="radio" name="src" value="hub" style="width:auto" ${S.naver_api_source!=='developers'?'checked':''}> NAVER API HUB (신규 발급은 여기서만 가능)</label>
@@ -181,9 +308,9 @@ function pSet(){const f=(id,l,ph)=>`<label class="small"><b>${l}</b></label><inp
  <ol class="steps small"><li><a href="https://searchad.naver.com" target="_blank" rel="noopener">네이버 검색광고</a> 가입 후 광고시스템 접속</li><li>상단 <b>도구 → API 사용 관리</b> → 네이버 검색광고 API 서비스 신청</li><li>엑세스라이선스, 비밀키, CUSTOMER_ID 를 아래에 입력</li></ol>
  ${f('searchad_api_key','엑세스라이선스 (API KEY)',S.searchad_api_key?'저장됨 — 바꿀 때만 입력':'')}${f('searchad_secret','비밀키 (SECRET KEY)',S.searchad_secret?'저장됨 — 바꿀 때만 입력':'')}${f('searchad_customer_id','CUSTOMER_ID','')}</div>
  <div class="card"><button class="btn" id="save">저장</button> <span class="mute small">키는 이 컴퓨터의 data/settings.json 에만 저장되며 외부로 보내지 않습니다(네이버 API 호출 제외).</span></div>`;
- $('#save').onclick=()=>run($('#save'),async()=>{const v={naver_api_source:document.querySelector('input[name=src]:checked').value};['naver_client_id','naver_client_secret','searchad_api_key','searchad_secret','searchad_customer_id'].forEach(k=>{const x=$('#'+k).value.trim();if(x)v[k]=x});
+ $('#save').onclick=()=>run($('#save'),async()=>{const v={naver_api_source:document.querySelector('input[name=src]:checked').value,llm_provider:document.querySelector('input[name=llmp]:checked').value};['gemini_api_key','llm_model','llm_base_url','llm_api_key','naver_client_id','naver_client_secret','searchad_api_key','searchad_secret','searchad_customer_id'].forEach(k=>{const x=$('#'+k).value.trim();if(x)v[k]=x});
   S=await api('POST','/api/settings',v);toast('저장했습니다');pSet()})}
 
-(async()=>{try{S=await api('GET','/api/settings')}catch(e){}go('blog')})();
+(async()=>{try{S=await api('GET','/api/settings');OPT=await api('GET','/api/writer/options')}catch(e){}go('write')})();
 </script>
 </body></html>

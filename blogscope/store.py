@@ -19,6 +19,16 @@ CREATE TABLE IF NOT EXISTS snapshots (
   data TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_snap ON snapshots(kind, key, at);
+CREATE TABLE IF NOT EXISTS docs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  keyword TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  input TEXT NOT NULL DEFAULT '{}',
+  plan TEXT NOT NULL DEFAULT '{}',
+  doc TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, at REAL NOT NULL, data TEXT NOT NULL);
 """
 
@@ -74,4 +84,38 @@ class Store:
     def cache_clear(self) -> None:
         with self.lock:
             self.conn.execute("DELETE FROM cache")
+            self.conn.commit()
+
+    # ---- 원고 ----
+    def doc_save(self, doc_id: int | None, keyword: str, title: str, input: dict, plan: dict, doc: dict) -> int:
+        now = datetime.now().isoformat(timespec="seconds")
+        vals = (keyword, title, json.dumps(input, ensure_ascii=False), json.dumps(plan, ensure_ascii=False),
+                json.dumps(doc, ensure_ascii=False))
+        with self.lock:
+            if doc_id and self.conn.execute("SELECT 1 FROM docs WHERE id=?", (doc_id,)).fetchone():
+                self.conn.execute("UPDATE docs SET keyword=?,title=?,input=?,plan=?,doc=?,updated_at=? WHERE id=?",
+                                  (*vals, now, doc_id))
+            else:
+                doc_id = self.conn.execute("INSERT INTO docs(keyword,title,input,plan,doc,created_at,updated_at) "
+                                           "VALUES (?,?,?,?,?,?,?)", (*vals, now, now)).lastrowid
+            self.conn.commit()
+        return doc_id
+
+    def doc_get(self, doc_id: int) -> dict | None:
+        r = self.conn.execute("SELECT * FROM docs WHERE id=?", (doc_id,)).fetchone()
+        if not r:
+            return None
+        d = dict(r)
+        for k in ("input", "plan", "doc"):
+            d[k] = json.loads(d[k] or "{}")
+        return d
+
+    def doc_list(self, limit: int = 200) -> list[dict]:
+        rows = self.conn.execute("SELECT id, keyword, title, created_at, updated_at FROM docs ORDER BY updated_at DESC LIMIT ?",
+                                 (limit,))
+        return [dict(r) for r in rows]
+
+    def doc_delete(self, doc_id: int) -> None:
+        with self.lock:
+            self.conn.execute("DELETE FROM docs WHERE id=?", (doc_id,))
             self.conn.commit()

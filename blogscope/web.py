@@ -6,12 +6,13 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import analysis, naver
+from . import analysis, llm, naver, writer
 from .settings import Settings
 from .store import Store
 
@@ -29,14 +30,60 @@ class ApiError(Exception):
 
 class App:
     def __init__(self, settings: Settings, store: Store, rss_fetcher=None, post_fetcher=None,
-                 api_factory=None, ad_factory=None):
+                 api_factory=None, ad_factory=None, llm_factory=None):
         self.settings, self.store = settings, store
+        self._llm_factory = llm_factory or self._default_llm
         self.fetch_rss = rss_fetcher or naver.fetch_rss
         self.fetch_post = post_fetcher or naver.fetch_post
         self._api_factory = api_factory or (lambda s: naver.OpenAPI(
             s.get("naver_client_id"), s.get("naver_client_secret"), hub=s.get("naver_api_source") != "developers"))
         self._ad_factory = ad_factory or (lambda s: naver.SearchAd(
             s.get("searchad_api_key"), s.get("searchad_secret"), s.get("searchad_customer_id")))
+
+    @staticmethod
+    def _default_llm(s: Settings):
+        if s.get("llm_provider") == "openai_compat":
+            return llm.OpenAICompat(s.get("llm_base_url"), s.get("llm_api_key"), s.get("llm_model"))
+        return llm.Gemini(s.get("gemini_api_key"), s.get("llm_model") or llm.DEFAULT_GEMINI_MODEL)
+
+    def llm(self):
+        if not self.settings.public()["has_llm"]:
+            raise ApiError("글쓰기는 AI 키가 필요합니다. '설정' 탭에서 무료 Gemini API 키를 입력하세요.", 412)
+        return self._llm_factory(self.settings)
+
+    def _refs(self, keyword: str) -> list[dict]:
+        api = self.api()
+        if not api:
+            return []
+        ck = f"refs:{keyword}"
+        if (hit := self.store.cache_get(ck, KEYWORD_TTL)) is not None:
+            return hit
+        try:
+            refs = [{"title": it["title"], "description": it["description"], "link": it["link"], "blogger": it["blogger"]}
+                    for it in api.search_blog(keyword, display=10, sort="sim")["items"]]
+        except naver.NaverError:
+            return []
+        self.store.cache_set(ck, refs)
+        return refs
+
+    def _volume(self, keyword: str):
+        ad = self.ad()
+        if not ad:
+            return None
+        try:
+            rel = ad.keywords([keyword])
+        except naver.NaverError:
+            return None
+        k = re.sub(r"\s+", "", keyword).lower()
+        return next((x for x in rel if re.sub(r"\s+", "", x["keyword"]).lower() == k), None)
+
+    def _finish(self, doc_id: int | None, inp: dict, plan: dict, doc: dict, save: bool = True) -> dict:
+        images = writer.count_photo_marks(doc) if inp.get("photo_marks") else None
+        diag = analysis.diagnose_post(doc["title"], writer.to_text(doc), inp["keyword"], images)
+        if save:
+            doc_id = self.store.doc_save(doc_id, inp["keyword"], doc["title"], inp, plan, doc)
+        return {"id": doc_id, "input": inp, "plan": plan, "doc": doc, "html": writer.to_html(doc),
+                "text": writer.to_text(doc), "diagnosis": diag}
 
     def api(self, required: bool = False):
         if self.settings.public()["has_search"]:
@@ -56,6 +103,8 @@ class App:
             raise ApiError(str(e))
         except naver.NaverError as e:
             raise ApiError(str(e), 502 if e.status in (0, 429) or e.status >= 500 else 400)
+        except llm.LLMError as e:
+            raise ApiError(str(e), e.status if e.status in (400, 401, 403, 404, 412, 429) else 502)
 
     def _route(self, method, path, q, body):
         if path == "/api/settings":
@@ -63,6 +112,53 @@ class App:
                 self.settings.update(body)
                 self.store.cache_clear()
             return self.settings.public()
+
+        # ------------------------------------------------ 글쓰기
+        if path == "/api/writer/options":
+            return writer.options()
+        if path == "/api/writer/plan" and method == "POST":
+            inp = writer.normalize(body.get("input") or {})
+            client = self.llm()
+            refs = self._refs(inp["keyword"]) if body.get("use_refs", True) else []
+            res = writer.plan(client, inp, refs)
+            return {**res, "input": inp, "refs": refs, "volume": self._volume(inp["keyword"])}
+        if path == "/api/writer/write" and method == "POST":
+            inp = writer.normalize(body.get("input") or {})
+            client = self.llm()
+            outline = [o for o in (body.get("outline") or []) if isinstance(o, dict) and str(o.get("heading", "")).strip()]
+            refs = self._refs(inp["keyword"]) if body.get("use_refs", True) else []
+            doc = writer.write(client, inp, body.get("title", ""), outline, refs)
+            plan = {"titles": body.get("titles") or [], "outline": outline, "hashtags": body.get("hashtags") or []}
+            return self._finish(body.get("id"), inp, plan, doc)
+        if path == "/api/writer/rewrite" and method == "POST":
+            d = self.store.doc_get(int(body.get("id") or 0))
+            if not d:
+                raise ApiError("원고를 찾을 수 없습니다.", 404)
+            doc = writer.clean_doc(body.get("doc") or d["doc"])  # 화면에서 고친 내용 기준
+            part = str(body.get("part", ""))
+            new = writer.rewrite_part(self.llm(), d["input"], doc, part, body.get("instruction", ""))
+            if part in ("intro", "outro"):
+                doc[part] = new["content"]
+            else:
+                doc["sections"][int(part)] = new
+            return self._finish(d["id"], d["input"], d["plan"], doc)
+
+        if path == "/api/docs":
+            return self.store.doc_list()
+        if path.startswith("/api/docs/"):
+            try:
+                doc_id = int(path.rsplit("/", 1)[1])
+            except ValueError:
+                raise ApiError("잘못된 원고 번호", 400)
+            d = self.store.doc_get(doc_id)
+            if not d:
+                raise ApiError("원고를 찾을 수 없습니다.", 404)
+            if method == "DELETE":
+                self.store.doc_delete(doc_id)
+                return {"ok": True}
+            if method == "POST":  # 화면에서 직접 고친 내용 저장
+                return self._finish(doc_id, d["input"], d["plan"], writer.clean_doc(body.get("doc")))
+            return self._finish(doc_id, d["input"], d["plan"], d["doc"], save=False)
 
         if path == "/api/blog" and method == "POST":
             blog_id, _ = naver.parse_blog_ref(body.get("blog", ""))

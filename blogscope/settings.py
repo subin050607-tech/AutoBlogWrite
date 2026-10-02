@@ -12,8 +12,13 @@ FIELDS = {
     "searchad_api_key": "SEARCHAD_API_KEY",
     "searchad_secret": "SEARCHAD_SECRET",
     "searchad_customer_id": "SEARCHAD_CUSTOMER_ID",
+    "llm_provider": "LLM_PROVIDER",          # gemini(기본) | openai_compat
+    "gemini_api_key": "GEMINI_API_KEY",
+    "llm_model": "LLM_MODEL",                # 비우면 gemini-2.5-flash
+    "llm_base_url": "LLM_BASE_URL",          # openai_compat 일 때
+    "llm_api_key": "LLM_API_KEY",            # openai_compat 일 때
 }
-SECRET = {"naver_client_secret", "searchad_api_key", "searchad_secret"}
+SECRET = {"naver_client_secret", "searchad_api_key", "searchad_secret", "gemini_api_key", "llm_api_key"}
 
 
 class Settings:
@@ -45,6 +50,9 @@ class Settings:
             v = self.get(k)
             out[k] = (v[:4] + "•" * 6 if v and k in SECRET else v)
         out["naver_api_source"] = "developers" if self.get("naver_api_source") == "developers" else "hub"
+        out["llm_provider"] = "openai_compat" if self.get("llm_provider") == "openai_compat" else "gemini"
+        out["has_llm"] = bool(self.get("gemini_api_key")) if out["llm_provider"] == "gemini" else \
+            bool(self.get("llm_base_url") and self.get("llm_model"))
         out["has_search"] = bool(self.get("naver_client_id") and self.get("naver_client_secret"))
         out["has_searchad"] = all(self.get(k) for k in ("searchad_api_key", "searchad_secret", "searchad_customer_id"))
         return out

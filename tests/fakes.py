@@ -56,3 +56,30 @@ POST_HTML = """<html><head><meta property="og:title" content="OG 제목"></head>
 <img class="se-image-resource" src="a.jpg"><img class="se-image-resource" src="b.jpg">
 <p class="se-text-paragraph"><span>텐트와 의자가 필요합니다.</span></p>
 </div><div class="se-viewer-footer"><img class="se-image-resource" src="footer.jpg"></div></body></html>"""
+
+
+class FakeLLM:
+    """프롬프트 내용으로 기획/본문/재작성 응답을 구분해 돌려주는 가짜 AI."""
+
+    def __init__(self):
+        self.prompts = []
+
+    def complete(self, system, user, json_mode=True, temperature=0.8):
+        import json
+        self.prompts.append(user)
+        if "다시 쓸 부분" in user:
+            return json.dumps({"heading": "새 소제목", "content": "다시 쓴 내용입니다.\n\n- 항목"}, ensure_ascii=False)
+        if "기획하세요" in user:
+            return "```json\n" + json.dumps({"titles": ["캠핑 준비물 체크리스트 총정리", "캠핑 준비물 B", "C", "D", "E", "F"],
+                                             "outline": [{"heading": "텐트 고르기", "points": ["크기"]}, {"heading": "의자와 테이블"},
+                                                         {"heading": ""}],
+                                             "hashtags": ["#캠핑", "캠핑 준비물", "캠핑"]}, ensure_ascii=False) + "\n```"
+        para = "캠핑 준비물을 챙길 때는 인원과 계절을 먼저 생각해요. 무게와 부피도 꼭 확인하세요. "
+        return json.dumps({
+            "title": "캠핑 준비물 체크리스트 총정리",
+            "intro": "처음 캠핑을 가면 무엇을 챙길지 막막하죠.\n\n" + para * 3,
+            "sections": [{"heading": h, "content": (para + f"{h} 이야기를 해볼게요. ") * 4 + "\n\n[사진: " + h + " 사진]\n\n- **핵심** 하나\n- 핵심 둘"}
+                         for h in ("텐트 고르기", "의자와 테이블", "조명과 전기", "주방 도구", "침낭과 매트")],
+            "outro": "캠핑 준비물 정리였습니다. [확인 필요: 캠핑장 규정]",
+            "faq": [{"q": "텐트는 몇 인용?", "a": "인원 +1 추천"}],
+            "hashtags": ["캠핑", "캠핑준비물"]}, ensure_ascii=False)
